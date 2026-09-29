@@ -1,2 +1,3 @@
-def main() -> None:
-    print("Hello from quilchoom!")
+"""
+Quilchoom development documentation and evidence system.
+"""
