@@ -9,15 +9,17 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from quilchoom.domain.event import Event
+from quilchoom.domain.evidence import Evidence
 from quilchoom.domain.project import Project
 from quilchoom.infrastructure.database.models import Base, ProjectModel
 from quilchoom.infrastructure.database.repositories import (
     EventRepository,
+    EvidenceRepository,
     ProjectRepository,
 )
 
 
-def test_save_success(tmp_path):
+def test_project_save(tmp_path):
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
 
@@ -42,7 +44,7 @@ def test_save_success(tmp_path):
         assert db_values == domain_values
 
 
-def test_get_by_id_on_existing_project(tmp_path):
+def test_project_repo_get_by_id_on_existing_project(tmp_path):
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
 
@@ -55,7 +57,7 @@ def test_get_by_id_on_existing_project(tmp_path):
     assert retrieved == project
 
 
-def test_get_by_id_on_non_existent_project():
+def test_project_repo_get_by_id_on_non_existent_project():
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
 
@@ -66,7 +68,7 @@ def test_get_by_id_on_non_existent_project():
     assert retrieved is None
 
 
-def test_get_by_repository_path_on_existing_project(tmp_path):
+def test_project_repo_get_by_repository_path_on_existing_project(tmp_path):
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
 
@@ -79,7 +81,7 @@ def test_get_by_repository_path_on_existing_project(tmp_path):
     assert retrieved == project
 
 
-def test_get_by_repository_path_on_unknown_path(tmp_path):
+def test_project_repo_get_by_repository_path_on_unknown_path(tmp_path):
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
 
@@ -90,7 +92,7 @@ def test_get_by_repository_path_on_unknown_path(tmp_path):
     assert retrieved is None
 
 
-def test_save_and_get_event(tmp_path):
+def test_event_repo_save_and_get_event(tmp_path):
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
 
@@ -114,7 +116,7 @@ def test_save_and_get_event(tmp_path):
     assert retrieved == event
 
 
-def test_get_by_id_on_non_existent_event():
+def test_event_repo_get_by_id_on_non_existent_event():
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
 
@@ -125,7 +127,7 @@ def test_get_by_id_on_non_existent_event():
     assert retrieved is None
 
 
-def test_list_events_for_project(tmp_path):
+def test_event_repo_list_events_for_project(tmp_path):
     path1 = tmp_path / "project1"
     path2 = tmp_path / "project2"
 
@@ -181,3 +183,89 @@ def test_list_events_for_project(tmp_path):
     events = event_repo.list_for_project(project.id)
 
     assert events == [event_b, event_c, event_a]
+
+
+def test_save_and_get_evidence(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(db_engine)
+    project_repo.save(project)
+
+    captured_at = datetime.now(UTC)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="diff --git ...",
+        reference="abc123",
+        captured_at=captured_at,
+        source="git",
+    )
+
+    evidence_repo = EvidenceRepository(db_engine)
+    evidence_repo.save(evidence)
+
+    retrieved = evidence_repo.get_by_id(evidence.id)
+
+    assert retrieved == evidence
+
+
+def test_evidence_get_by_id_returns_none_for_nonexistent_evidence(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    evidence_repo = EvidenceRepository(db_engine)
+
+    assert evidence_repo.get_by_id(uuid4()) is None
+
+
+def test_list_evidence_for_project(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(
+        name="my_project",
+        repository_path=(tmp_path / "my_project"),
+    )
+    other_project = Project(
+        name="other_project",
+        repository_path=(tmp_path / "other_project"),
+    )
+
+    project_repo = ProjectRepository(db_engine)
+    project_repo.save(project)
+    project_repo.save(other_project)
+
+    evidence_repo = EvidenceRepository(db_engine)
+
+    later_evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="later",
+        captured_at=datetime(2026, 9, 30, 14, 0, tzinfo=UTC),
+        source="git",
+    )
+    earlier_evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="earlier",
+        captured_at=datetime(2026, 9, 30, 12, 0, tzinfo=UTC),
+        source="git",
+    )
+    other_evidence = Evidence(
+        project_id=other_project.id,
+        type="git_diff",
+        content="other project",
+        captured_at=datetime(2026, 9, 30, 11, 0, tzinfo=UTC),
+        source="git",
+    )
+
+    evidence_repo.save(later_evidence)
+    evidence_repo.save(other_evidence)
+    evidence_repo.save(earlier_evidence)
+
+    evidence = evidence_repo.list_for_project(project.id)
+
+    assert evidence == [earlier_evidence, later_evidence]

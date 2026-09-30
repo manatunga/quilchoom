@@ -10,8 +10,13 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from quilchoom.domain.event import Event
+from quilchoom.domain.evidence import Evidence
 from quilchoom.domain.project import Project
-from quilchoom.infrastructure.database.models import EventModel, ProjectModel
+from quilchoom.infrastructure.database.models import (
+    EventModel,
+    EvidenceModel,
+    ProjectModel,
+)
 
 
 class ProjectRepository:
@@ -123,3 +128,60 @@ class EventRepository:
             events = [self._to_domain(model) for model in models]
 
             return events
+
+
+class EvidenceRepository:
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
+    def _to_domain(self, model: EvidenceModel) -> Evidence:
+        return Evidence(
+            id=UUID(model.id),
+            project_id=UUID(model.project_id),
+            type=model.type,
+            content=model.content,
+            reference=model.reference,
+            captured_at=model.captured_at.replace(tzinfo=UTC),
+            source=model.source,
+            metadata=model.evidence_metadata,
+        )
+
+    def save(self, evidence: Evidence) -> None:
+        with Session(self.engine) as session:
+            evidence_model = EvidenceModel(
+                id=str(evidence.id),
+                project_id=str(evidence.project_id),
+                type=evidence.type,
+                content=evidence.content,
+                reference=evidence.reference,
+                captured_at=evidence.captured_at.replace(tzinfo=None),
+                source=evidence.source,
+                evidence_metadata=evidence.metadata,
+            )
+            session.add(evidence_model)
+            session.commit()
+
+    def get_by_id(self, evidence_id: UUID) -> Evidence | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(EvidenceModel).where(EvidenceModel.id == str(evidence_id))
+            ).first()
+
+            if model is None:
+                return None
+
+            evidence = self._to_domain(model)
+
+            return evidence
+
+    def list_for_project(self, project_id: UUID) -> list[Evidence]:
+        with Session(self.engine) as session:
+            models = session.scalars(
+                select(EvidenceModel)
+                .where(EvidenceModel.project_id == str(project_id))
+                .order_by(EvidenceModel.captured_at.asc())
+            ).all()
+
+            evidence = [self._to_domain(model) for model in models]
+
+            return evidence

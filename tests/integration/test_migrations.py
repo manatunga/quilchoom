@@ -10,7 +10,7 @@ from quilchoom.infrastructure.database.errors import DatabaseMigrationError
 from quilchoom.infrastructure.database.migrations import upgrade_database
 
 
-def test_upgrade_database_success(tmp_path):
+def test_upgrade_creates_projects_table(tmp_path):
     db_path = tmp_path / "quilchoom.db"
     upgrade_database(db_path)
 
@@ -27,7 +27,7 @@ def test_upgrade_database_success(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert result == "11da2eb1dbf1"
+        assert result == "004b83fcafcb"
 
 
 def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
@@ -49,7 +49,7 @@ def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert result == "11da2eb1dbf1"
+        assert result == "004b83fcafcb"
 
 
 def test_upgrade_database_rejects_incompatible_legacy_database(tmp_path):
@@ -121,7 +121,64 @@ def test_upgrade_database_creates_events_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "11da2eb1dbf1"
+        assert revision == "004b83fcafcb"
+
+    finally:
+        engine.dispose()
+
+
+def test_upgrade_database_creates_evidence_table(tmp_path):
+    database_path = tmp_path / "quilchoom.db"
+
+    upgrade_database(database_path)
+
+    engine = create_engine(f"sqlite:///{database_path}")
+
+    try:
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+
+        assert "projects" in tables
+        assert "events" in tables
+        assert "evidence" in tables
+
+        columns = inspector.get_columns("evidence")
+        column_names = [column["name"] for column in columns]
+
+        assert column_names == [
+            "id",
+            "project_id",
+            "type",
+            "content",
+            "reference",
+            "captured_at",
+            "source",
+            "metadata",
+        ]
+
+        foreign_keys = inspector.get_foreign_keys("evidence")
+        project_foreign_key = next(
+            fk for fk in foreign_keys if fk["constrained_columns"] == ["project_id"]
+        )
+
+        assert project_foreign_key["referred_table"] == "projects"
+        assert project_foreign_key["referred_columns"] == ["id"]
+
+        indexes = inspector.get_indexes("evidence")
+        event_index = next(
+            index
+            for index in indexes
+            if index["name"] == "ix_evidence_project_id_captured_at"
+        )
+
+        assert event_index["column_names"] == ["project_id", "captured_at"]
+
+        with engine.connect() as connection:
+            revision = connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
+
+        assert revision == "004b83fcafcb"
 
     finally:
         engine.dispose()

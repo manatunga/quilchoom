@@ -7,7 +7,7 @@ from sqlalchemy import JSON, create_engine, inspect
 from quilchoom.infrastructure.database.models import Base
 
 
-def test_project_model_success():
+def test_project_model_defines_expected_schema():
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
 
@@ -101,3 +101,83 @@ def test_event_model_defines_metadata_as_json():
     col_type = next(col["type"] for col in columns if col["name"] == "metadata")
 
     assert isinstance(col_type, JSON)
+
+
+def test_evidence_model_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    tables = inspector.get_table_names()
+
+    assert "evidence" in tables
+
+    columns = inspector.get_columns("evidence")
+    column_names = [column["name"] for column in columns]
+
+    pk_cols = inspector.get_pk_constraint("evidence")["constrained_columns"]
+
+    assert column_names == [
+        "id",
+        "project_id",
+        "type",
+        "content",
+        "reference",
+        "captured_at",
+        "source",
+        "metadata",
+    ]
+    assert pk_cols == ["id"]
+
+    foreign_keys = inspector.get_foreign_keys("evidence")
+    foreign_key = next(
+        fk for fk in foreign_keys if fk["constrained_columns"] == ["project_id"]
+    )
+
+    assert foreign_key["referred_table"] == "projects"
+    assert foreign_key["referred_columns"] == ["id"]
+
+    project_id_column = next(
+        column for column in columns if column["name"] == "project_id"
+    )
+
+    assert project_id_column["nullable"] is False
+
+    composite_keys = inspector.get_indexes("evidence")
+    composite_index = next(
+        index
+        for index in composite_keys
+        if index["name"] == "ix_evidence_project_id_captured_at"
+    )
+
+    assert composite_index["column_names"] == ["project_id", "captured_at"]
+
+
+def test_evidence_model_defines_expected_nullability():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    columns = inspector.get_columns("evidence")
+    nullability = {column["name"]: column["nullable"] for column in columns}
+
+    assert nullability["content"] is True
+    assert nullability["reference"] is True
+    assert nullability["metadata"] is True
+
+    assert nullability["type"] is False
+    assert nullability["captured_at"] is False
+    assert nullability["source"] is False
+
+
+def test_evidence_model_defines_metadata_as_json():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    columns = inspector.get_columns("evidence")
+    metadata_type = next(
+        column["type"] for column in columns if column["name"] == "metadata"
+    )
+
+    assert isinstance(metadata_type, JSON)

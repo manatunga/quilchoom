@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from quilchoom.domain.event import Event
 
 
-def test_event_init_defaults():
+def test_event_defaults():
     project_id = uuid4()
     timestamp = datetime.now(UTC)
 
@@ -34,7 +34,7 @@ def test_event_init_defaults():
     assert event.metadata is None
 
 
-def test_event_init_creates_unique_ids():
+def test_event_creates_unique_ids():
     event1 = Event(
         project_id=uuid4(),
         type="git_commit",
@@ -55,7 +55,7 @@ def test_event_init_creates_unique_ids():
     assert event1.id != event2.id
 
 
-def test_event_id_is_uuid():
+def test_event_generates_uuid():
     event = Event(
         project_id=uuid4(),
         type="git_commit",
@@ -67,7 +67,7 @@ def test_event_id_is_uuid():
     assert isinstance(event.id, UUID)
 
 
-def test_event_required_parameters():
+def test_event_requires_required_fields():
     with pytest.raises(ValidationError) as exc_info:
         Event()  # type: ignore
 
