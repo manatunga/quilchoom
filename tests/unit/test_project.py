@@ -1,5 +1,5 @@
 """
-Automated test suite for the project domain object.
+Unit tests for Quilchoom's Project domain object.
 """
 
 from uuid import UUID
@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from quilchoom.domain.project import Project
 
 
-def test_project_init(tmp_path):
+def test_project_init_success(tmp_path):
     project = Project(name="my_project", repository_path=tmp_path)
 
     assert bool(project.id) is True

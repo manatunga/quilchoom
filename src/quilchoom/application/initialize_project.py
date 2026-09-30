@@ -6,10 +6,8 @@ from pathlib import Path
 
 from quilchoom.application.errors import ProjectInitializationError
 from quilchoom.domain.project import Project
-from quilchoom.infrastructure.database.connection import (
-    create_database_engine,
-    initialize_database,
-)
+from quilchoom.infrastructure.database.connection import create_database_engine
+from quilchoom.infrastructure.database.migrations import upgrade_database
 from quilchoom.infrastructure.database.repositories import ProjectRepository
 from quilchoom.infrastructure.filesystem.workspace import initialize_workspace
 from quilchoom.infrastructure.git.repository import find_repository_root
@@ -23,8 +21,10 @@ def initialize_project(repository_path: Path | None = None) -> Project:
 
     workspace = initialize_workspace(repo_root)
 
-    db_engine = create_database_engine(workspace / "quilchoom.db")
-    initialize_database(db_engine)
+    db_path = workspace / "quilchoom.db"
+    upgrade_database(db_path)
+
+    db_engine = create_database_engine(db_path)
 
     project_repository = ProjectRepository(db_engine)
     existing_project = project_repository.get_by_repository_path(repo_root)

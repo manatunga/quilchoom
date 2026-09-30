@@ -27,7 +27,14 @@ def test_init_success(tmp_path, monkeypatch):
     result = runner.invoke(app, ["init"])
 
     assert result.exit_code == 0
-    assert "[Quilchoom] 🚀 Initialized" in result.stdout
+
+    assert "[SCANNING] Mapping local repository..." in result.stdout
+    assert "[✓] Root repository confirmed at:" in result.stdout
+
+    assert "[SCRIBING] Preparing documentation workspace..." in result.stdout
+    assert "[✓] Tracking workspace: .quilchoom/" in result.stdout
+
+    assert "[✓] Initialization complete. Local workspace is ready" in result.stdout
     assert (repo_root / ".quilchoom").is_dir()
 
 
@@ -37,6 +44,4 @@ def test_init_outside_git_repository(tmp_path, monkeypatch):
     result = runner.invoke(app, ["init"])
 
     assert result.exit_code == 1
-    assert (
-        "[ERROR] ❌ Current directory is not inside a Git repository." in result.stdout
-    )
+    assert "[✗] Current directory is not inside a Git repository." in result.stdout

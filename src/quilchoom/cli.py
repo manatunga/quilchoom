@@ -7,6 +7,7 @@ import typer
 
 from quilchoom.application.errors import ProjectInitializationError
 from quilchoom.application.initialize_project import initialize_project
+from quilchoom.ui import terminal
 
 app = typer.Typer(rich_markup_mode="rich")
 
@@ -19,12 +20,19 @@ def main() -> None:
 @app.command()
 def init() -> None:
     """Initialize Quilchoom in the current Git repository."""
+    terminal.header("INITIALIZING LOCAL WORKSPACE")
+
     try:
         project = initialize_project()
 
     except ProjectInitializationError:
-        typer.echo("[ERROR] ❌ Current directory is not inside a Git repository.")
+        terminal.error("Current directory is not inside a Git repository.")
         raise typer.Exit(code=1)
 
-    typer.echo(f"[Quilchoom] 🚀 Initialized '{project.name}'")
-    typer.echo(f"[Quilchoom] 📁 Repository: {project.repository_path}")
+    terminal.statement("SCANNING", "Mapping local repository...")
+    terminal.success(f"Root repository confirmed at: {project.repository_path}")
+
+    terminal.statement("SCRIBING", "Preparing documentation workspace...")
+    terminal.success("Tracking workspace: .quilchoom/")
+
+    terminal.success("Initialization complete. Local workspace is ready", indent=0)
