@@ -62,9 +62,10 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    database_url = os.environ.get("QUILCHOOM_DATABASE_URL") or config.get_main_option(
-        "sqlalchemy.url"
-    )
+    database_url = config.get_main_option("sqlalchemy.url")
+
+    if not database_url:
+        database_url = os.environ.get("QUILCHOOM_DATABASE_URL")
 
     if not database_url:
         raise RuntimeError("A workspace database URL must be provided.")

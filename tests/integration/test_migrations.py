@@ -27,7 +27,7 @@ def test_upgrade_creates_projects_table(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert result == "004b83fcafcb"
+        assert result == "03b2175f033b"
 
 
 def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
@@ -49,7 +49,7 @@ def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert result == "004b83fcafcb"
+        assert result == "03b2175f033b"
 
 
 def test_upgrade_database_rejects_incompatible_legacy_database(tmp_path):
@@ -116,12 +116,19 @@ def test_upgrade_database_creates_events_table(tmp_path):
 
         assert event_index["column_names"] == ["project_id", "timestamp"]
 
+        constraints = inspect(engine).get_unique_constraints("events")
+
+        assert any(
+            constraint["name"] == "uq_events_project_source_reference"
+            for constraint in constraints
+        )
+
         with engine.connect() as connection:
             revision = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "004b83fcafcb"
+        assert revision == "03b2175f033b"
 
     finally:
         engine.dispose()
@@ -173,12 +180,19 @@ def test_upgrade_database_creates_evidence_table(tmp_path):
 
         assert event_index["column_names"] == ["project_id", "captured_at"]
 
+        constraints = inspect(engine).get_unique_constraints("evidence")
+
+        assert any(
+            constraint["name"] == "uq_evidence_project_source_reference"
+            for constraint in constraints
+        )
+
         with engine.connect() as connection:
             revision = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "004b83fcafcb"
+        assert revision == "03b2175f033b"
 
     finally:
         engine.dispose()

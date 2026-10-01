@@ -21,14 +21,15 @@ def upgrade_database(database_path: Path) -> None:
     database_url = f"sqlite:///{database_path.resolve()}"
     config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
-    if not database_path.exists():
+    engine = create_engine(database_url)
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+
+    if not tables:
         command.upgrade(config, "head")
         return
 
-    engine = create_engine(database_url)
-    inspector = inspect(engine)
-
-    if "alembic_version" in inspector.get_table_names():
+    if "alembic_version" in tables:
         command.upgrade(config, "head")
         return
 
