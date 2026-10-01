@@ -117,6 +117,26 @@ class EventRepository:
 
             return event
 
+    def get_by_source_reference(
+        self,
+        project_id: UUID,
+        source: str,
+        source_reference: str,
+    ) -> Event | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(EventModel).where(
+                    EventModel.project_id == str(project_id),
+                    EventModel.source == source,
+                    EventModel.source_reference == source_reference,
+                )
+            ).first()
+
+            if model is None:
+                return None
+
+            return self._to_domain(model)
+
     def list_for_project(self, project_id: UUID) -> list[Event]:
         with Session(self.engine) as session:
             models = session.scalars(
@@ -173,6 +193,26 @@ class EvidenceRepository:
             evidence = self._to_domain(model)
 
             return evidence
+
+    def get_by_reference(
+        self,
+        project_id: UUID,
+        source: str,
+        reference: str,
+    ) -> Evidence | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(EvidenceModel).where(
+                    EvidenceModel.project_id == str(project_id),
+                    EvidenceModel.source == source,
+                    EvidenceModel.reference == reference,
+                )
+            ).first()
+
+            if model is None:
+                return None
+
+            return self._to_domain(model)
 
     def list_for_project(self, project_id: UUID) -> list[Evidence]:
         with Session(self.engine) as session:

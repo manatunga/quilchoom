@@ -185,6 +185,38 @@ def test_event_repo_list_events_for_project(tmp_path):
     assert events == [event_b, event_c, event_a]
 
 
+def test_event_get_by_source_reference(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(db_engine)
+    project_repo.save(project)
+
+    event = Event(
+        project_id=project.id,
+        type="git_commit",
+        timestamp=datetime(2026, 9, 30, 12, 0, tzinfo=UTC),
+        summary="Added event persistence",
+        source="git",
+        source_reference="abc123",
+    )
+    event_repo = EventRepository(db_engine)
+    event_repo.save(event)
+
+    retrieved = event_repo.get_by_source_reference(
+        project.id, event.source, event.source_reference
+    )
+
+    assert retrieved == event
+
+    fail_retrieved = event_repo.get_by_source_reference(
+        project.id, event.source, "a1b2c3d"
+    )
+
+    assert fail_retrieved is None
+
+
 def test_save_and_get_evidence(tmp_path):
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
@@ -219,6 +251,43 @@ def test_evidence_get_by_id_returns_none_for_nonexistent_evidence(tmp_path):
     evidence_repo = EvidenceRepository(db_engine)
 
     assert evidence_repo.get_by_id(uuid4()) is None
+
+
+def test_evidence_get_by_source_reference(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(db_engine)
+    project_repo.save(project)
+
+    captured_at = datetime.now(UTC)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="diff --git ...",
+        reference="abc123",
+        captured_at=captured_at,
+        source="git",
+    )
+
+    evidence_repo = EvidenceRepository(db_engine)
+    evidence_repo.save(evidence)
+
+    reference = evidence.reference
+
+    assert reference is not None
+
+    retrieved = evidence_repo.get_by_reference(project.id, evidence.source, reference)
+
+    assert retrieved == evidence
+
+    fail_retrieved = evidence_repo.get_by_reference(
+        project.id, evidence.source, "a1b2c3d"
+    )
+
+    assert fail_retrieved is None
 
 
 def test_list_evidence_for_project(tmp_path):
