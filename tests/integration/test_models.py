@@ -91,6 +91,13 @@ def test_event_model_defines_expected_schema():
 
     assert composite_index["column_names"] == ["project_id", "timestamp"]
 
+    constraints = inspect(db_engine).get_unique_constraints("events")
+
+    assert any(
+        constraint["name"] == "uq_events_project_source_reference"
+        for constraint in constraints
+    )
+
 
 def test_event_model_defines_metadata_as_json():
     db_engine = create_engine("sqlite:///:memory:")
@@ -151,6 +158,13 @@ def test_evidence_model_defines_expected_schema():
     )
 
     assert composite_index["column_names"] == ["project_id", "captured_at"]
+
+    constraints = inspect(db_engine).get_unique_constraints("evidence")
+
+    assert any(
+        constraint["name"] == "uq_evidence_project_source_reference"
+        for constraint in constraints
+    )
 
 
 def test_evidence_model_defines_expected_nullability():

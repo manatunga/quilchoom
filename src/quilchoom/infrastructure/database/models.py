@@ -5,7 +5,7 @@ domain data.
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -32,6 +32,12 @@ class EventModel(Base):
 
     __table_args__ = (
         Index("ix_events_project_id_timestamp", "project_id", "timestamp"),
+        UniqueConstraint(
+            "project_id",
+            "source",
+            "source_reference",
+            name="uq_events_project_source_reference",
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -61,6 +67,12 @@ class EvidenceModel(Base):
 
     __table_args__ = (
         Index("ix_evidence_project_id_captured_at", "project_id", "captured_at"),
+        UniqueConstraint(
+            "project_id",
+            "source",
+            "reference",
+            name="uq_evidence_project_source_reference",
+        ),
     )
 
     id: Mapped[str] = mapped_column(
