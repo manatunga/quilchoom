@@ -27,7 +27,7 @@ def test_upgrade_creates_projects_table(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert revision == "1d97255f2308"
+        assert revision == "b746cacea516"
 
 
 def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
@@ -49,7 +49,7 @@ def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert revision == "1d97255f2308"
+        assert revision == "b746cacea516"
 
 
 def test_upgrade_database_rejects_incompatible_legacy_database(tmp_path):
@@ -128,7 +128,7 @@ def test_upgrade_database_creates_events_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "1d97255f2308"
+        assert revision == "b746cacea516"
 
     finally:
         engine.dispose()
@@ -192,7 +192,7 @@ def test_upgrade_database_creates_evidence_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "1d97255f2308"
+        assert revision == "b746cacea516"
 
     finally:
         engine.dispose()
@@ -277,7 +277,7 @@ def test_upgrade_database_creates_knowledge_claim_tables(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "1d97255f2308"
+        assert revision == "b746cacea516"
 
     finally:
         engine.dispose()
@@ -345,7 +345,149 @@ def test_upgrade_database_creates_corrections_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "1d97255f2308"
+        assert revision == "b746cacea516"
+
+    finally:
+        engine.dispose()
+
+
+def test_upgrade_database_creates_document_tables(tmp_path):
+    database_path = tmp_path / "quilchoom.db"
+
+    upgrade_database(database_path)
+
+    engine = create_engine(f"sqlite:///{database_path}")
+
+    try:
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+
+        assert "documents" in tables
+        assert "document_versions" in tables
+        assert "document_version_claims" in tables
+
+        document_columns = {
+            column["name"]: column for column in inspector.get_columns("documents")
+        }
+
+        assert set(document_columns) == {
+            "id",
+            "project_id",
+            "key",
+            "kind",
+            "created_at",
+        }
+
+        assert document_columns["id"]["nullable"] is False
+        assert document_columns["project_id"]["nullable"] is False
+        assert document_columns["key"]["nullable"] is False
+        assert document_columns["kind"]["nullable"] is False
+        assert document_columns["created_at"]["nullable"] is False
+
+        document_foreign_keys = inspector.get_foreign_keys("documents")
+        project_fk = next(
+            fk
+            for fk in document_foreign_keys
+            if fk["constrained_columns"] == ["project_id"]
+        )
+
+        assert project_fk["referred_table"] == "projects"
+        assert project_fk["referred_columns"] == ["id"]
+
+        document_constraints = inspector.get_unique_constraints("documents")
+        project_key_constraint = next(
+            constraint
+            for constraint in document_constraints
+            if constraint["name"] == "uq_documents_project_key"
+        )
+
+        assert project_key_constraint["column_names"] == ["project_id", "key"]
+
+        version_columns = {
+            column["name"]: column
+            for column in inspector.get_columns("document_versions")
+        }
+
+        assert set(version_columns) == {
+            "id",
+            "document_id",
+            "version_number",
+            "content",
+            "origin",
+            "created_at",
+        }
+
+        assert version_columns["id"]["nullable"] is False
+        assert version_columns["document_id"]["nullable"] is False
+        assert version_columns["version_number"]["nullable"] is False
+        assert version_columns["content"]["nullable"] is False
+        assert version_columns["origin"]["nullable"] is False
+        assert version_columns["created_at"]["nullable"] is False
+
+        version_foreign_keys = inspector.get_foreign_keys("document_versions")
+        document_fk = next(
+            fk
+            for fk in version_foreign_keys
+            if fk["constrained_columns"] == ["document_id"]
+        )
+
+        assert document_fk["referred_table"] == "documents"
+        assert document_fk["referred_columns"] == ["id"]
+
+        version_constraints = inspector.get_unique_constraints("document_versions")
+        version_number_constraint = next(
+            constraint
+            for constraint in version_constraints
+            if constraint["name"] == "uq_document_versions_document_version_number"
+        )
+
+        assert version_number_constraint["column_names"] == [
+            "document_id",
+            "version_number",
+        ]
+
+        association_columns = inspector.get_columns("document_version_claims")
+        association_column_names = [column["name"] for column in association_columns]
+
+        assert association_column_names == [
+            "document_version_id",
+            "claim_id",
+        ]
+
+        association_primary_key = inspector.get_pk_constraint("document_version_claims")
+
+        assert set(association_primary_key["constrained_columns"]) == {
+            "document_version_id",
+            "claim_id",
+        }
+
+        association_foreign_keys = inspector.get_foreign_keys("document_version_claims")
+
+        version_fk = next(
+            fk
+            for fk in association_foreign_keys
+            if fk["constrained_columns"] == ["document_version_id"]
+        )
+        claim_fk = next(
+            fk
+            for fk in association_foreign_keys
+            if fk["constrained_columns"] == ["claim_id"]
+        )
+
+        assert version_fk["referred_table"] == "document_versions"
+        assert version_fk["referred_columns"] == ["id"]
+        assert version_fk.get("options", {}).get("ondelete") == "CASCADE"
+
+        assert claim_fk["referred_table"] == "knowledge_claims"
+        assert claim_fk["referred_columns"] == ["id"]
+        assert claim_fk.get("options", {}).get("ondelete") == "CASCADE"
+
+        with engine.connect() as connection:
+            revision = connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
+
+        assert revision == "b746cacea516"
 
     finally:
         engine.dispose()

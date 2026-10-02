@@ -334,3 +334,161 @@ def test_correction_model_defines_expected_nullability():
     assert nullability["reason"] is False
     assert nullability["replacement_claim_id"] is True
     assert nullability["created_at"] is False
+
+
+def test_document_model_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    tables = inspector.get_table_names()
+
+    assert "documents" in tables
+
+    columns = inspector.get_columns("documents")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == [
+        "id",
+        "project_id",
+        "key",
+        "kind",
+        "created_at",
+    ]
+
+    pk_cols = inspector.get_pk_constraint("documents")["constrained_columns"]
+
+    assert pk_cols == ["id"]
+
+    foreign_keys = inspector.get_foreign_keys("documents")
+    project_foreign_key = next(
+        fk for fk in foreign_keys if fk["constrained_columns"] == ["project_id"]
+    )
+
+    assert project_foreign_key["referred_table"] == "projects"
+    assert project_foreign_key["referred_columns"] == ["id"]
+
+
+def test_document_model_defines_expected_nullability():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    columns = inspector.get_columns("documents")
+    nullability = {column["name"]: column["nullable"] for column in columns}
+
+    assert nullability["id"] is False
+    assert nullability["project_id"] is False
+    assert nullability["key"] is False
+    assert nullability["kind"] is False
+    assert nullability["created_at"] is False
+
+
+def test_document_model_defines_project_key_uniqueness():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    constraints = inspector.get_unique_constraints("documents")
+
+    constraint = next(
+        constraint
+        for constraint in constraints
+        if constraint["name"] == "uq_documents_project_key"
+    )
+
+    assert constraint["column_names"] == ["project_id", "key"]
+
+
+def test_document_version_model_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    tables = inspector.get_table_names()
+
+    assert "document_versions" in tables
+
+    columns = inspector.get_columns("document_versions")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == [
+        "id",
+        "document_id",
+        "version_number",
+        "content",
+        "origin",
+        "created_at",
+    ]
+
+    pk_cols = inspector.get_pk_constraint("document_versions")["constrained_columns"]
+
+    assert pk_cols == ["id"]
+
+    foreign_keys = inspector.get_foreign_keys("document_versions")
+    document_foreign_key = next(
+        fk for fk in foreign_keys if fk["constrained_columns"] == ["document_id"]
+    )
+
+    assert document_foreign_key["referred_table"] == "documents"
+    assert document_foreign_key["referred_columns"] == ["id"]
+
+
+def test_document_version_model_defines_expected_nullability():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    columns = inspector.get_columns("document_versions")
+    nullability = {column["name"]: column["nullable"] for column in columns}
+
+    assert nullability["id"] is False
+    assert nullability["document_id"] is False
+    assert nullability["version_number"] is False
+    assert nullability["content"] is False
+    assert nullability["origin"] is False
+    assert nullability["created_at"] is False
+
+
+def test_document_version_defines_document_version_number_uniqueness():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    constraints = inspector.get_unique_constraints("document_versions")
+
+    constraint = next(
+        constraint
+        for constraint in constraints
+        if constraint["name"] == "uq_document_versions_document_version_number"
+    )
+
+    assert constraint["column_names"] == ["document_id", "version_number"]
+
+
+def test_document_version_claims_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+
+    columns = inspector.get_columns("document_version_claims")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == ["document_version_id", "claim_id"]
+
+    pk_cols = inspector.get_pk_constraint("document_version_claims")[
+        "constrained_columns"
+    ]
+
+    assert set(pk_cols) == {"document_version_id", "claim_id"}
+
+    foreign_keys = inspector.get_foreign_keys("document_version_claims")
+    referenced_tables = {
+        fk["referred_table"]: fk["constrained_columns"] for fk in foreign_keys
+    }
+
+    assert referenced_tables == {
+        "document_versions": ["document_version_id"],
+        "knowledge_claims": ["claim_id"],
+    }

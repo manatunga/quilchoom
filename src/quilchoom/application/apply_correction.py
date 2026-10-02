@@ -29,12 +29,12 @@ def apply_correction(
 
     if target_claim is None:
         raise KnowledgeClaimNotFoundError(
-            f"Knowledge claim not found: {target_claim_id}"
+            f"Target knowledge claim not found: {target_claim_id}"
         )
 
     if target_claim.project_id != project_id:
         raise CorrectionProjectMismatchError(
-            f"Claim belongs to a different project: {target_claim.project_id}"
+            f"Target knowledge claim belongs to a different project: {target_claim.project_id}"
         )
 
     if replacement_claim_id is not None:
@@ -47,12 +47,12 @@ def apply_correction(
 
         if replacement_claim is None:
             raise KnowledgeClaimNotFoundError(
-                f"Knowledge claim not found: {replacement_claim_id}"
+                f"Replacement knowledge claim not found: {replacement_claim_id}"
             )
 
         if replacement_claim.project_id != project_id:
             raise CorrectionProjectMismatchError(
-                f"Claim belongs to a different project: {replacement_claim.project_id}"
+                f"Replacement knowledge claim belongs to a different project: {replacement_claim.project_id}"
             )
 
     if replacement_claim_id is not None:

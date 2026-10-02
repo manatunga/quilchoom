@@ -10,17 +10,22 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from quilchoom.domain.correction import Correction
+from quilchoom.domain.document import Document, DocumentVersion
 from quilchoom.domain.event import Event
 from quilchoom.domain.evidence import Evidence
 from quilchoom.domain.knowledge_claim import ClaimStatus, KnowledgeClaim
 from quilchoom.domain.project import Project
 from quilchoom.infrastructure.database.errors import (
+    DocumentNotFoundError,
     EvidenceNotFoundError,
     EvidenceProjectMismatchError,
     KnowledgeClaimNotFoundError,
+    KnowledgeClaimProjectMismatchError,
 )
 from quilchoom.infrastructure.database.models import (
     CorrectionModel,
+    DocumentModel,
+    DocumentVersionModel,
     EventModel,
     EvidenceModel,
     KnowledgeClaimModel,
@@ -409,3 +414,185 @@ class CorrectionRepository:
             corrections = [self._to_domain(model) for model in models]
 
             return corrections
+
+
+class DocumentRepository:
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
+    def _to_domain(self, model: DocumentModel) -> Document:
+        return Document(
+            id=UUID(model.id),
+            project_id=UUID(model.project_id),
+            key=model.key,
+            kind=model.kind,
+            created_at=model.created_at.replace(tzinfo=UTC),
+        )
+
+    def save(self, document: Document) -> None:
+        with Session(self.engine) as session:
+            document_model = DocumentModel(
+                id=str(document.id),
+                project_id=str(document.project_id),
+                key=document.key,
+                kind=document.kind,
+                created_at=document.created_at.replace(tzinfo=None),
+            )
+            session.add(document_model)
+            session.commit()
+
+    def get_by_id(self, document_id: UUID) -> Document | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(DocumentModel).where(DocumentModel.id == str(document_id))
+            ).first()
+
+            if model is None:
+                return None
+
+            document = self._to_domain(model)
+
+            return document
+
+    def get_by_key(self, project_id: UUID, key: str) -> Document | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(DocumentModel).where(
+                    DocumentModel.project_id == str(project_id),
+                    DocumentModel.key == key,
+                )
+            ).first()
+
+            if model is None:
+                return None
+
+            document = self._to_domain(model)
+
+            return document
+
+    def list_for_project(self, project_id: UUID) -> list[Document]:
+        with Session(self.engine) as session:
+            models = session.scalars(
+                select(DocumentModel)
+                .where(DocumentModel.project_id == str(project_id))
+                .order_by(
+                    DocumentModel.created_at.asc(),
+                    DocumentModel.id.asc(),
+                )
+            ).all()
+
+            documents = [self._to_domain(model) for model in models]
+
+            return documents
+
+
+class DocumentVersionRepository:
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
+    def _to_domain(self, model: DocumentVersionModel) -> DocumentVersion:
+        return DocumentVersion(
+            id=UUID(model.id),
+            document_id=UUID(model.document_id),
+            version_number=model.version_number,
+            content=model.content,
+            origin=model.origin,
+            claim_ids=[UUID(claim.id) for claim in model.claims],
+            created_at=model.created_at.replace(tzinfo=UTC),
+        )
+
+    def save(self, version: DocumentVersion) -> None:
+        with Session(self.engine) as session:
+            document_model = session.scalars(
+                select(DocumentModel).where(
+                    DocumentModel.id == str(version.document_id)
+                )
+            ).first()
+
+            if document_model is None:
+                raise DocumentNotFoundError(
+                    f"Document not found: {version.document_id}"
+                )
+
+            claim_models = session.scalars(
+                select(KnowledgeClaimModel).where(
+                    KnowledgeClaimModel.id.in_(
+                        [str(claim_id) for claim_id in version.claim_ids]
+                    )
+                )
+            ).all()
+
+            found_claim_ids = {UUID(model.id) for model in claim_models}
+            missing_claim_ids = set(version.claim_ids) - found_claim_ids
+
+            if missing_claim_ids:
+                raise KnowledgeClaimNotFoundError(
+                    "Knowledge claim not found: "
+                    + ", ".join(str(claim_id) for claim_id in missing_claim_ids)
+                )
+
+            mismatched_claim_ids = [
+                UUID(claim_model.id)
+                for claim_model in claim_models
+                if claim_model.project_id != document_model.project_id
+            ]
+
+            if mismatched_claim_ids:
+                raise KnowledgeClaimProjectMismatchError(
+                    "Knowledge claim belongs to a different project: "
+                    + ", ".join(str(claim_id) for claim_id in mismatched_claim_ids)
+                )
+
+            version_model = DocumentVersionModel(
+                id=str(version.id),
+                document_id=str(version.document_id),
+                version_number=version.version_number,
+                content=version.content,
+                origin=version.origin,
+                claims=claim_models,
+                created_at=version.created_at.replace(tzinfo=None),
+            )
+            session.add(version_model)
+            session.commit()
+
+    def get_by_id(self, version_id: UUID) -> DocumentVersion | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(DocumentVersionModel).where(
+                    DocumentVersionModel.id == str(version_id)
+                )
+            ).first()
+
+            if model is None:
+                return None
+
+            version = self._to_domain(model)
+
+            return version
+
+    def list_for_document(self, document_id: UUID) -> list[DocumentVersion]:
+        with Session(self.engine) as session:
+            models = session.scalars(
+                select(DocumentVersionModel)
+                .where(DocumentVersionModel.document_id == str(document_id))
+                .order_by(DocumentVersionModel.version_number.asc())
+            ).all()
+
+            versions = [self._to_domain(model) for model in models]
+
+            return versions
+
+    def get_latest(self, document_id: UUID) -> DocumentVersion | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(DocumentVersionModel)
+                .where(DocumentVersionModel.document_id == str(document_id))
+                .order_by(DocumentVersionModel.version_number.desc())
+            ).first()
+
+            if model is None:
+                return None
+
+            version = self._to_domain(model)
+
+            return version

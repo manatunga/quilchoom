@@ -17,3 +17,11 @@ class EvidenceProjectMismatchError(Exception):
 
 class KnowledgeClaimNotFoundError(Exception):
     """Raised when a knowledge claim cannot be found in the database."""
+
+
+class DocumentNotFoundError(Exception):
+    """Raised when a referenced document cannot be found."""
+
+
+class KnowledgeClaimProjectMismatchError(Exception):
+    """Raised when a knowledge claim belongs to a different project."""

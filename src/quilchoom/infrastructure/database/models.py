@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Table,
     Text,
@@ -19,6 +20,7 @@ from sqlalchemy import (
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from quilchoom.domain.document import DocumentVersionOrigin
 from quilchoom.domain.knowledge_claim import ClaimConfidence, ClaimStatus
 
 
@@ -37,6 +39,22 @@ knowledge_claim_evidence = Table(
     Column(
         "evidence_id",
         ForeignKey("evidence.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
+document_version_claims = Table(
+    "document_version_claims",
+    Base.metadata,
+    Column(
+        "document_version_id",
+        ForeignKey("document_versions.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "claim_id",
+        ForeignKey("knowledge_claims.id", ondelete="CASCADE"),
         primary_key=True,
     ),
 )
@@ -133,7 +151,9 @@ class EvidenceModel(Base):
     )
 
 
-def ValuedEnum(enum_cls: type[ClaimConfidence | ClaimStatus]) -> SQLAlchemyEnum:
+def ValuedEnum(
+    enum_cls: type[ClaimConfidence | ClaimStatus | DocumentVersionOrigin],
+) -> SQLAlchemyEnum:
     return SQLAlchemyEnum(enum_cls, values_callable=lambda cls: [m.value for m in cls])
 
 
@@ -164,6 +184,10 @@ class KnowledgeClaimModel(Base):
         secondary=knowledge_claim_evidence,
         back_populates="claims",
     )
+    document_versions: Mapped[list[DocumentVersionModel]] = relationship(
+        secondary=document_version_claims,
+        back_populates="claims",
+    )
 
 
 class CorrectionModel(Base):
@@ -192,4 +216,69 @@ class CorrectionModel(Base):
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
+    )
+
+
+class DocumentModel(Base):
+    __tablename__ = "documents"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "key",
+            name="uq_documents_project_key",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        nullable=False,
+    )
+    project_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("projects.id"),
+        nullable=False,
+    )
+    key: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class DocumentVersionModel(Base):
+    __tablename__ = "document_versions"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "document_id",
+            "version_number",
+            name="uq_document_versions_document_version_number",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        nullable=False,
+    )
+    document_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("documents.id"),
+        nullable=False,
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    origin: Mapped[DocumentVersionOrigin] = mapped_column(
+        ValuedEnum(DocumentVersionOrigin),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    claims: Mapped[list[KnowledgeClaimModel]] = relationship(
+        secondary=document_version_claims,
+        back_populates="document_versions",
     )
