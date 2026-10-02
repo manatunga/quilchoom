@@ -11,10 +11,16 @@ from sqlalchemy.orm import Session
 
 from quilchoom.domain.event import Event
 from quilchoom.domain.evidence import Evidence
+from quilchoom.domain.knowledge_claim import KnowledgeClaim
 from quilchoom.domain.project import Project
+from quilchoom.infrastructure.database.errors import (
+    EvidenceNotFoundError,
+    EvidenceProjectMismatchError,
+)
 from quilchoom.infrastructure.database.models import (
     EventModel,
     EvidenceModel,
+    KnowledgeClaimModel,
     ProjectModel,
 )
 
@@ -225,3 +231,91 @@ class EvidenceRepository:
             evidence = [self._to_domain(model) for model in models]
 
             return evidence
+
+
+class KnowledgeClaimRepository:
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
+    def _to_domain(self, model: KnowledgeClaimModel) -> KnowledgeClaim:
+        return KnowledgeClaim(
+            id=UUID(model.id),
+            project_id=UUID(model.project_id),
+            statement=model.statement,
+            confidence=model.confidence,
+            status=model.status,
+            evidence_ids=[UUID(evidence.id) for evidence in model.evidence],
+        )
+
+    def save(self, claim: KnowledgeClaim) -> None:
+        with Session(self.engine) as session:
+            evidence_models = session.scalars(
+                select(EvidenceModel).where(
+                    EvidenceModel.id.in_(
+                        [str(evidence_id) for evidence_id in claim.evidence_ids]
+                    )
+                )
+            ).all()
+
+            found_evidence_ids = {UUID(model.id) for model in evidence_models}
+            missing_evidence_ids = set(claim.evidence_ids) - found_evidence_ids
+
+            if missing_evidence_ids:
+                raise EvidenceNotFoundError(
+                    "Evidence not found: "
+                    + ", ".join(
+                        str(evidence_id) for evidence_id in missing_evidence_ids
+                    )
+                )
+
+            mismatched_evidence_ids = [
+                UUID(model.id)
+                for model in evidence_models
+                if model.project_id != str(claim.project_id)
+            ]
+
+            if mismatched_evidence_ids:
+                raise EvidenceProjectMismatchError(
+                    "Evidence belongs to a different project: "
+                    + ", ".join(
+                        str(evidence_id) for evidence_id in mismatched_evidence_ids
+                    )
+                )
+
+            claim_model = KnowledgeClaimModel(
+                id=str(claim.id),
+                project_id=str(claim.project_id),
+                statement=claim.statement,
+                confidence=claim.confidence,
+                status=claim.status,
+                evidence=evidence_models,
+            )
+            session.add(claim_model)
+            session.commit()
+
+    def get_by_id(self, claim_id: UUID) -> KnowledgeClaim | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(KnowledgeClaimModel).where(
+                    KnowledgeClaimModel.id == str(claim_id)
+                )
+            ).first()
+
+            if model is None:
+                return None
+
+            claim = self._to_domain(model)
+
+            return claim
+
+    def list_for_project(self, project_id: UUID) -> list[KnowledgeClaim]:
+        with Session(self.engine) as session:
+            models = session.scalars(
+                select(KnowledgeClaimModel).where(
+                    KnowledgeClaimModel.project_id == str(project_id)
+                )
+            ).all()
+
+            claims = [self._to_domain(model) for model in models]
+
+            return claims

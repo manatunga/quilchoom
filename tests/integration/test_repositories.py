@@ -5,16 +5,27 @@ Integration tests for Quilchoom's database repositories.
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from quilchoom.domain.event import Event
 from quilchoom.domain.evidence import Evidence
+from quilchoom.domain.knowledge_claim import (
+    ClaimConfidence,
+    ClaimStatus,
+    KnowledgeClaim,
+)
 from quilchoom.domain.project import Project
+from quilchoom.infrastructure.database.errors import (
+    EvidenceNotFoundError,
+    EvidenceProjectMismatchError,
+)
 from quilchoom.infrastructure.database.models import Base, ProjectModel
 from quilchoom.infrastructure.database.repositories import (
     EventRepository,
     EvidenceRepository,
+    KnowledgeClaimRepository,
     ProjectRepository,
 )
 
@@ -338,3 +349,221 @@ def test_list_evidence_for_project(tmp_path):
     evidence = evidence_repo.list_for_project(project.id)
 
     assert evidence == [earlier_evidence, later_evidence]
+
+
+def test_save_and_get_knowledge_claim(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(
+        name="my_project",
+        repository_path=tmp_path,
+    )
+    project_repo = ProjectRepository(db_engine)
+    project_repo.save(project)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="diff --git ...",
+        reference="abc123",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    evidence_repo = EvidenceRepository(db_engine)
+    evidence_repo.save(evidence)
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="The project added knowledge claim persistence.",
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+
+    claim_repo = KnowledgeClaimRepository(db_engine)
+    claim_repo.save(claim)
+
+    retrieved = claim_repo.get_by_id(claim.id)
+
+    assert retrieved == claim
+
+
+def test_knowledge_claim_get_by_id_returns_none_for_nonexistent_claim():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    claim_repo = KnowledgeClaimRepository(db_engine)
+
+    assert claim_repo.get_by_id(uuid4()) is None
+
+
+def test_knowledge_claim_supports_multiple_evidence(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(db_engine).save(project)
+
+    evidence_repo = EvidenceRepository(db_engine)
+
+    evidence_a = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="first diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    evidence_b = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="second diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+
+    evidence_repo.save(evidence_a)
+    evidence_repo.save(evidence_b)
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="A change is supported by multiple pieces of evidence.",
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence_a.id, evidence_b.id],
+    )
+
+    claim_repo = KnowledgeClaimRepository(db_engine)
+    claim_repo.save(claim)
+
+    retrieved = claim_repo.get_by_id(claim.id)
+
+    assert retrieved is not None
+    assert set(retrieved.evidence_ids) == {evidence_a.id, evidence_b.id}
+
+
+def test_knowledge_claim_save_rejects_missing_evidence(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(db_engine).save(project)
+
+    missing_evidence_id = uuid4()
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Unsupported claim.",
+        confidence=ClaimConfidence.LOW,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[missing_evidence_id],
+    )
+
+    claim_repo = KnowledgeClaimRepository(db_engine)
+
+    with pytest.raises(EvidenceNotFoundError):
+        claim_repo.save(claim)
+
+    assert claim_repo.get_by_id(claim.id) is None
+
+
+def test_knowledge_claim_save_rejects_evidence_from_different_project(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(
+        name="my_project",
+        repository_path=tmp_path / "my_project",
+    )
+    other_project = Project(
+        name="other_project",
+        repository_path=tmp_path / "other_project",
+    )
+
+    project_repo = ProjectRepository(db_engine)
+    project_repo.save(project)
+    project_repo.save(other_project)
+
+    evidence = Evidence(
+        project_id=other_project.id,
+        type="git_diff",
+        content="unrelated diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    EvidenceRepository(db_engine).save(evidence)
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Claim for the first project.",
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+
+    claim_repo = KnowledgeClaimRepository(db_engine)
+
+    with pytest.raises(EvidenceProjectMismatchError):
+        claim_repo.save(claim)
+
+    assert claim_repo.get_by_id(claim.id) is None
+
+
+def test_list_knowledge_claims_for_project(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(
+        name="my_project",
+        repository_path=(tmp_path / "my_project"),
+    )
+    other_project = Project(
+        name="other_project",
+        repository_path=(tmp_path / "other_project"),
+    )
+
+    project_repo = ProjectRepository(db_engine)
+    project_repo.save(project)
+    project_repo.save(other_project)
+
+    evidence_a = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="first diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    evidence_b = Evidence(
+        project_id=other_project.id,
+        type="git_diff",
+        content="second diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+
+    evidence_repo = EvidenceRepository(db_engine)
+    evidence_repo.save(evidence_a)
+    evidence_repo.save(evidence_b)
+
+    claim_a = KnowledgeClaim(
+        project_id=project.id,
+        statement="Git capture was made idempotent",
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence_a.id],
+    )
+    claim_b = KnowledgeClaim(
+        project_id=other_project.id,
+        statement="Alembic migrations were added for SQLAlchemy models",
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.INVALIDATED,
+        evidence_ids=[evidence_b.id],
+    )
+
+    claim_repo = KnowledgeClaimRepository(db_engine)
+    claim_repo.save(claim_a)
+    claim_repo.save(claim_b)
+
+    claims = claim_repo.list_for_project(project.id)
+
+    assert claims == [claim_a]
