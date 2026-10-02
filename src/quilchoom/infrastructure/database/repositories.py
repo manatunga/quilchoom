@@ -9,15 +9,18 @@ from uuid import UUID
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from quilchoom.domain.correction import Correction
 from quilchoom.domain.event import Event
 from quilchoom.domain.evidence import Evidence
-from quilchoom.domain.knowledge_claim import KnowledgeClaim
+from quilchoom.domain.knowledge_claim import ClaimStatus, KnowledgeClaim
 from quilchoom.domain.project import Project
 from quilchoom.infrastructure.database.errors import (
     EvidenceNotFoundError,
     EvidenceProjectMismatchError,
+    KnowledgeClaimNotFoundError,
 )
 from quilchoom.infrastructure.database.models import (
+    CorrectionModel,
     EventModel,
     EvidenceModel,
     KnowledgeClaimModel,
@@ -319,3 +322,90 @@ class KnowledgeClaimRepository:
             claims = [self._to_domain(model) for model in models]
 
             return claims
+
+
+class CorrectionRepository:
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
+    def _to_domain(self, model: CorrectionModel) -> Correction:
+        return Correction(
+            id=UUID(model.id),
+            project_id=UUID(model.project_id),
+            target_claim_id=UUID(model.target_claim_id),
+            reason=model.reason,
+            replacement_claim_id=(
+                UUID(model.replacement_claim_id)
+                if model.replacement_claim_id is not None
+                else None
+            ),
+            created_at=model.created_at.replace(tzinfo=UTC),
+        )
+
+    def _to_model(self, correction: Correction) -> CorrectionModel:
+        return CorrectionModel(
+            id=str(correction.id),
+            project_id=str(correction.project_id),
+            target_claim_id=str(correction.target_claim_id),
+            reason=correction.reason,
+            replacement_claim_id=(
+                str(correction.replacement_claim_id)
+                if correction.replacement_claim_id is not None
+                else None
+            ),
+            created_at=correction.created_at,
+        )
+
+    def save(self, correction: Correction) -> None:
+        with Session(self.engine) as session:
+            correction_model = self._to_model(correction)
+            session.add(correction_model)
+            session.commit()
+
+    def save_with_claim_status_update(
+        self,
+        correction: Correction,
+        status: ClaimStatus,
+    ) -> None:
+        with Session(self.engine) as session:
+            target_model = session.scalars(
+                select(KnowledgeClaimModel).where(
+                    KnowledgeClaimModel.id == str(correction.target_claim_id)
+                )
+            ).first()
+
+            if target_model is None:
+                raise KnowledgeClaimNotFoundError(
+                    f"Knowledge claim not found: {correction.target_claim_id}"
+                )
+
+            target_model.status = status
+
+            correction_model = self._to_model(correction)
+            session.add(correction_model)
+            session.commit()
+
+    def get_by_id(self, correction_id: UUID) -> Correction | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(CorrectionModel).where(CorrectionModel.id == str(correction_id))
+            ).first()
+
+            if model is None:
+                return None
+
+            correction = self._to_domain(model)
+
+            return correction
+
+    def list_for_project(self, project_id: UUID) -> list[Correction]:
+        with Session(self.engine) as session:
+            models = session.scalars(
+                select(CorrectionModel).where(
+                    CorrectionModel.project_id == str(project_id)
+                )
+            ).all()
+
+            corrections = [self._to_domain(model) for model in models]
+
+            return corrections

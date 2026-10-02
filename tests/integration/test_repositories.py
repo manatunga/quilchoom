@@ -7,8 +7,10 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from quilchoom.domain.correction import Correction
 from quilchoom.domain.event import Event
 from quilchoom.domain.evidence import Evidence
 from quilchoom.domain.knowledge_claim import (
@@ -20,9 +22,11 @@ from quilchoom.domain.project import Project
 from quilchoom.infrastructure.database.errors import (
     EvidenceNotFoundError,
     EvidenceProjectMismatchError,
+    KnowledgeClaimNotFoundError,
 )
 from quilchoom.infrastructure.database.models import Base, ProjectModel
 from quilchoom.infrastructure.database.repositories import (
+    CorrectionRepository,
     EventRepository,
     EvidenceRepository,
     KnowledgeClaimRepository,
@@ -491,7 +495,8 @@ def test_knowledge_claim_save_rejects_evidence_from_different_project(tmp_path):
         captured_at=datetime.now(UTC),
         source="git",
     )
-    EvidenceRepository(db_engine).save(evidence)
+    evidence_repo = EvidenceRepository(db_engine)
+    evidence_repo.save(evidence)
 
     claim = KnowledgeClaim(
         project_id=project.id,
@@ -567,3 +572,345 @@ def test_list_knowledge_claims_for_project(tmp_path):
     claims = claim_repo.list_for_project(project.id)
 
     assert claims == [claim_a]
+
+
+def test_save_and_get_correction(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project_repo = ProjectRepository(engine)
+    evidence_repo = EvidenceRepository(engine)
+    claim_repo = KnowledgeClaimRepository(engine)
+    correction_repo = CorrectionRepository(engine)
+
+    project = Project(
+        name="Test Project",
+        repository_path=tmp_path,
+    )
+    project_repo.save(project)
+
+    captured_at = datetime.now(UTC)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="Test evidence",
+        reference="a1b2c3d",
+        captured_at=captured_at,
+        source="git",
+    )
+    evidence_repo.save(evidence)
+
+    target_claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Original interpretation",
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+    replacement_claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Corrected interpretation",
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+
+    claim_repo.save(target_claim)
+    claim_repo.save(replacement_claim)
+
+    correction = Correction(
+        project_id=project.id,
+        target_claim_id=target_claim.id,
+        reason="The original interpretation was incomplete.",
+        replacement_claim_id=replacement_claim.id,
+    )
+
+    correction_repo.save(correction)
+
+    retrieved = correction_repo.get_by_id(correction.id)
+
+    assert retrieved == correction
+
+
+def test_correction_get_by_id_returns_none_for_nonexistent_correction():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    correction_repo = CorrectionRepository(engine)
+
+    assert correction_repo.get_by_id(uuid4()) is None
+
+
+def test_list_corrections_for_project(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project_repo = ProjectRepository(engine)
+    evidence_repo = EvidenceRepository(engine)
+    claim_repo = KnowledgeClaimRepository(engine)
+    correction_repo = CorrectionRepository(engine)
+
+    project = Project(
+        name="Test Project",
+        repository_path=tmp_path / "test-project",
+    )
+    other_project = Project(
+        name="Other Project",
+        repository_path=tmp_path / "other-project",
+    )
+
+    project_repo.save(project)
+    project_repo.save(other_project)
+
+    captured_at = datetime.now(UTC)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="Test evidence",
+        source="git",
+        captured_at=captured_at,
+    )
+    other_evidence = Evidence(
+        project_id=other_project.id,
+        type="git_diff",
+        content="Other evidence",
+        source="git",
+        captured_at=captured_at,
+    )
+
+    evidence_repo.save(evidence)
+    evidence_repo.save(other_evidence)
+
+    target_claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Original interpretation",
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+    other_target_claim = KnowledgeClaim(
+        project_id=other_project.id,
+        statement="Other interpretation",
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[other_evidence.id],
+    )
+
+    claim_repo.save(target_claim)
+    claim_repo.save(other_target_claim)
+
+    correction = Correction(
+        project_id=project.id,
+        target_claim_id=target_claim.id,
+        reason="Reason for correction",
+    )
+    other_correction = Correction(
+        project_id=other_project.id,
+        target_claim_id=other_target_claim.id,
+        reason="Reason for other correction",
+    )
+
+    correction_repo.save(correction)
+    correction_repo.save(other_correction)
+
+    corrections = correction_repo.list_for_project(project.id)
+
+    assert corrections == [correction]
+
+
+def test_save_correction_with_claim_status_update(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project_repo = ProjectRepository(engine)
+    evidence_repo = EvidenceRepository(engine)
+    claim_repo = KnowledgeClaimRepository(engine)
+    correction_repo = CorrectionRepository(engine)
+
+    project = Project(
+        name="Test Project",
+        repository_path=tmp_path,
+    )
+    project_repo.save(project)
+
+    captured_at = datetime.now(UTC)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="Test evidence",
+        source="git",
+        captured_at=captured_at,
+    )
+    evidence_repo.save(evidence)
+
+    target_claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Original interpretation",
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+    replacement_claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Corrected interpretation",
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+
+    claim_repo.save(target_claim)
+    claim_repo.save(replacement_claim)
+
+    correction = Correction(
+        project_id=project.id,
+        target_claim_id=target_claim.id,
+        reason="The original interpretation was incomplete.",
+        replacement_claim_id=replacement_claim.id,
+    )
+
+    correction_repo.save_with_claim_status_update(
+        correction,
+        ClaimStatus.CORRECTED,
+    )
+
+    retrieved_claim = claim_repo.get_by_id(target_claim.id)
+    retrieved_correction = correction_repo.get_by_id(correction.id)
+
+    assert retrieved_claim is not None
+    assert retrieved_claim.status == ClaimStatus.CORRECTED
+    assert retrieved_correction == correction
+
+
+def test_save_correction_with_claim_invalidation(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project_repo = ProjectRepository(engine)
+    evidence_repo = EvidenceRepository(engine)
+    claim_repo = KnowledgeClaimRepository(engine)
+    correction_repo = CorrectionRepository(engine)
+
+    project = Project(
+        name="Test Project",
+        repository_path=tmp_path,
+    )
+    project_repo.save(project)
+
+    captured_at = datetime.now(UTC)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="Test evidence",
+        source="git",
+        captured_at=captured_at,
+    )
+    evidence_repo.save(evidence)
+
+    target_claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Unsupported interpretation",
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+    claim_repo.save(target_claim)
+
+    correction = Correction(
+        project_id=project.id,
+        target_claim_id=target_claim.id,
+        reason="The interpretation is no longer supported.",
+    )
+
+    correction_repo.save_with_claim_status_update(
+        correction,
+        ClaimStatus.INVALIDATED,
+    )
+
+    retrieved_claim = claim_repo.get_by_id(target_claim.id)
+    retrieved_correction = correction_repo.get_by_id(correction.id)
+
+    assert retrieved_claim is not None
+    assert retrieved_claim.status == ClaimStatus.INVALIDATED
+    assert retrieved_correction is not None
+    assert retrieved_correction == correction
+    assert retrieved_correction.replacement_claim_id is None
+
+
+def test_save_correction_with_status_update_rejects_missing_target():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    correction_repo = CorrectionRepository(engine)
+
+    correction = Correction(
+        project_id=uuid4(),
+        target_claim_id=uuid4(),
+        reason="Reason for correction",
+    )
+
+    with pytest.raises(KnowledgeClaimNotFoundError):
+        correction_repo.save_with_claim_status_update(
+            correction,
+            ClaimStatus.INVALIDATED,
+        )
+
+    assert correction_repo.get_by_id(correction.id) is None
+
+
+def test_save_correction_with_status_update_rolls_back_on_failure(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project_repo = ProjectRepository(engine)
+    evidence_repo = EvidenceRepository(engine)
+    claim_repo = KnowledgeClaimRepository(engine)
+    correction_repo = CorrectionRepository(engine)
+
+    project = Project(
+        name="Test Project",
+        repository_path=tmp_path,
+    )
+    project_repo.save(project)
+
+    captured_at = datetime.now(UTC)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="Test evidence",
+        source="git",
+        captured_at=captured_at,
+    )
+    evidence_repo.save(evidence)
+
+    target_claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Original interpretation",
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+    claim_repo.save(target_claim)
+
+    correction = Correction(
+        project_id=project.id,
+        target_claim_id=target_claim.id,
+        reason="Reason for correction",
+    )
+
+    correction_repo.save(correction)
+
+    with pytest.raises(IntegrityError):
+        correction_repo.save_with_claim_status_update(
+            correction,
+            ClaimStatus.INVALIDATED,
+        )
+
+    retrieved_claim = claim_repo.get_by_id(target_claim.id)
+
+    assert retrieved_claim is not None
+    assert retrieved_claim.status == ClaimStatus.ACTIVE

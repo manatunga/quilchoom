@@ -269,3 +269,68 @@ def test_knowledge_claim_evidence_defines_expected_schema():
         "knowledge_claims": ["claim_id"],
         "evidence": ["evidence_id"],
     }
+
+
+def test_correction_model_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    tables = inspector.get_table_names()
+
+    assert "corrections" in tables
+
+    columns = inspector.get_columns("corrections")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == [
+        "id",
+        "project_id",
+        "target_claim_id",
+        "reason",
+        "replacement_claim_id",
+        "created_at",
+    ]
+
+    pk_cols = inspector.get_pk_constraint("corrections")["constrained_columns"]
+
+    assert pk_cols == ["id"]
+
+    foreign_keys = inspector.get_foreign_keys("corrections")
+
+    project_foreign_key = next(
+        fk for fk in foreign_keys if fk["constrained_columns"] == ["project_id"]
+    )
+    target_claim_foreign_key = next(
+        fk for fk in foreign_keys if fk["constrained_columns"] == ["target_claim_id"]
+    )
+    replacement_claim_foreign_key = next(
+        fk
+        for fk in foreign_keys
+        if fk["constrained_columns"] == ["replacement_claim_id"]
+    )
+
+    assert project_foreign_key["referred_table"] == "projects"
+    assert project_foreign_key["referred_columns"] == ["id"]
+
+    assert target_claim_foreign_key["referred_table"] == "knowledge_claims"
+    assert target_claim_foreign_key["referred_columns"] == ["id"]
+
+    assert replacement_claim_foreign_key["referred_table"] == "knowledge_claims"
+    assert replacement_claim_foreign_key["referred_columns"] == ["id"]
+
+
+def test_correction_model_defines_expected_nullability():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    columns = inspector.get_columns("corrections")
+    nullability = {column["name"]: column["nullable"] for column in columns}
+
+    assert nullability["id"] is False
+    assert nullability["project_id"] is False
+    assert nullability["target_claim_id"] is False
+    assert nullability["reason"] is False
+    assert nullability["replacement_claim_id"] is True
+    assert nullability["created_at"] is False

@@ -23,11 +23,11 @@ def test_upgrade_creates_projects_table(tmp_path):
     assert "alembic_version" in tables
 
     with db_engine.connect() as connection:
-        result = connection.execute(
+        revision = connection.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert result == "a393cc967881"
+        assert revision == "1d97255f2308"
 
 
 def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
@@ -45,11 +45,11 @@ def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
     assert "alembic_version" in tables
 
     with db_engine.connect() as connection:
-        result = connection.execute(
+        revision = connection.execute(
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert result == "a393cc967881"
+        assert revision == "1d97255f2308"
 
 
 def test_upgrade_database_rejects_incompatible_legacy_database(tmp_path):
@@ -128,7 +128,7 @@ def test_upgrade_database_creates_events_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "a393cc967881"
+        assert revision == "1d97255f2308"
 
     finally:
         engine.dispose()
@@ -192,7 +192,7 @@ def test_upgrade_database_creates_evidence_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "a393cc967881"
+        assert revision == "1d97255f2308"
 
     finally:
         engine.dispose()
@@ -277,7 +277,75 @@ def test_upgrade_database_creates_knowledge_claim_tables(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "a393cc967881"
+        assert revision == "1d97255f2308"
+
+    finally:
+        engine.dispose()
+
+
+def test_upgrade_database_creates_corrections_table(tmp_path):
+    database_path = tmp_path / "quilchoom.db"
+
+    upgrade_database(database_path)
+
+    engine = create_engine(f"sqlite:///{database_path}")
+
+    try:
+        inspector = inspect(engine)
+
+        assert "corrections" in inspector.get_table_names()
+
+        columns = {
+            column["name"]: column for column in inspector.get_columns("corrections")
+        }
+
+        assert set(columns) == {
+            "id",
+            "project_id",
+            "target_claim_id",
+            "reason",
+            "replacement_claim_id",
+            "created_at",
+        }
+
+        assert columns["id"]["nullable"] is False
+        assert columns["project_id"]["nullable"] is False
+        assert columns["target_claim_id"]["nullable"] is False
+        assert columns["reason"]["nullable"] is False
+        assert columns["replacement_claim_id"]["nullable"] is True
+        assert columns["created_at"]["nullable"] is False
+
+        foreign_keys = inspector.get_foreign_keys("corrections")
+
+        project_fk = next(
+            fk for fk in foreign_keys if fk["constrained_columns"] == ["project_id"]
+        )
+        target_claim_fk = next(
+            fk
+            for fk in foreign_keys
+            if fk["constrained_columns"] == ["target_claim_id"]
+        )
+        replacement_claim_fk = next(
+            fk
+            for fk in foreign_keys
+            if fk["constrained_columns"] == ["replacement_claim_id"]
+        )
+
+        assert project_fk["referred_table"] == "projects"
+        assert project_fk["referred_columns"] == ["id"]
+
+        assert target_claim_fk["referred_table"] == "knowledge_claims"
+        assert target_claim_fk["referred_columns"] == ["id"]
+
+        assert replacement_claim_fk["referred_table"] == "knowledge_claims"
+        assert replacement_claim_fk["referred_columns"] == ["id"]
+
+        with engine.connect() as connection:
+            revision = connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
+
+        assert revision == "1d97255f2308"
 
     finally:
         engine.dispose()

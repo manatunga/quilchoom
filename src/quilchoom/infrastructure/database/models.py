@@ -164,3 +164,32 @@ class KnowledgeClaimModel(Base):
         secondary=knowledge_claim_evidence,
         back_populates="claims",
     )
+
+
+class CorrectionModel(Base):
+    __tablename__ = "corrections"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        nullable=False,
+    )
+    project_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("projects.id"),
+        nullable=False,
+    )
+    target_claim_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("knowledge_claims.id"),
+        nullable=False,
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    replacement_claim_id: Mapped[str | None] = mapped_column(
+        String,
+        ForeignKey("knowledge_claims.id"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )

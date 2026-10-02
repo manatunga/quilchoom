@@ -13,3 +13,7 @@ class EvidenceNotFoundError(Exception):
 
 class EvidenceProjectMismatchError(Exception):
     """Raised when claim evidence belongs to a different project."""
+
+
+class KnowledgeClaimNotFoundError(Exception):
+    """Raised when a knowledge claim cannot be found in the database."""

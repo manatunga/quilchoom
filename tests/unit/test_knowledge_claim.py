@@ -71,44 +71,19 @@ def test_knowledge_claim_requires_evidence():
 
 
 def test_knowledge_claim_requires_valid_fields():
-    project_id = uuid4()
-    evidence_id = uuid4()
+    with pytest.raises(ValidationError) as exc_info:
+        KnowledgeClaim()  # type: ignore
 
-    with pytest.raises(ValidationError):
-        KnowledgeClaim(
-            project_id=project_id,
-            statement=None,  # type: ignore
-            confidence=ClaimConfidence.HIGH,
-            status=ClaimStatus.ACTIVE,
-            evidence_ids=[evidence_id],
-        )
+    errors = exc_info.value.errors()
+    missing_fields = [err["loc"][0] for err in errors if err["type"] == "missing"]
 
-    with pytest.raises(ValidationError):
-        KnowledgeClaim(
-            project_id=None,  # type: ignore
-            statement="Git capture has been made idempotent",
-            confidence=ClaimConfidence.HIGH,
-            status=ClaimStatus.ACTIVE,
-            evidence_ids=[evidence_id],
-        )
-
-    with pytest.raises(ValidationError):
-        KnowledgeClaim(
-            project_id=project_id,
-            statement="Git capture has been made idempotent",
-            confidence=None,  # type: ignore
-            status=ClaimStatus.ACTIVE,
-            evidence_ids=[evidence_id],
-        )
-
-    with pytest.raises(ValidationError):
-        KnowledgeClaim(
-            project_id=project_id,
-            statement="Git capture has been made idempotent",
-            confidence=ClaimConfidence.HIGH,
-            status=None,  # type: ignore
-            evidence_ids=[evidence_id],
-        )
+    assert set(missing_fields) == {
+        "project_id",
+        "statement",
+        "confidence",
+        "status",
+        "evidence_ids",
+    }
 
 
 def test_knowledge_claim_enum_values():
