@@ -27,7 +27,7 @@ def test_upgrade_creates_projects_table(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert result == "03b2175f033b"
+        assert result == "a393cc967881"
 
 
 def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
@@ -49,7 +49,7 @@ def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert result == "03b2175f033b"
+        assert result == "a393cc967881"
 
 
 def test_upgrade_database_rejects_incompatible_legacy_database(tmp_path):
@@ -128,7 +128,7 @@ def test_upgrade_database_creates_events_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "03b2175f033b"
+        assert revision == "a393cc967881"
 
     finally:
         engine.dispose()
@@ -192,7 +192,92 @@ def test_upgrade_database_creates_evidence_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "03b2175f033b"
+        assert revision == "a393cc967881"
+
+    finally:
+        engine.dispose()
+
+
+def test_upgrade_database_creates_knowledge_claim_tables(tmp_path):
+    database_path = tmp_path / "quilchoom.db"
+
+    upgrade_database(database_path)
+
+    engine = create_engine(f"sqlite:///{database_path}")
+
+    try:
+        inspector = inspect(engine)
+        tables = inspector.get_table_names()
+
+        assert "knowledge_claims" in tables
+        assert "knowledge_claim_evidence" in tables
+
+        claim_columns = inspector.get_columns("knowledge_claims")
+        claim_column_names = [column["name"] for column in claim_columns]
+
+        assert claim_column_names == [
+            "id",
+            "project_id",
+            "statement",
+            "confidence",
+            "status",
+        ]
+
+        claim_primary_key = inspector.get_pk_constraint("knowledge_claims")
+        assert claim_primary_key["constrained_columns"] == ["id"]
+
+        claim_foreign_keys = inspector.get_foreign_keys("knowledge_claims")
+        project_foreign_key = next(
+            fk
+            for fk in claim_foreign_keys
+            if fk["constrained_columns"] == ["project_id"]
+        )
+
+        assert project_foreign_key["referred_table"] == "projects"
+        assert project_foreign_key["referred_columns"] == ["id"]
+
+        association_columns = inspector.get_columns("knowledge_claim_evidence")
+        association_column_names = [column["name"] for column in association_columns]
+
+        assert association_column_names == ["claim_id", "evidence_id"]
+
+        association_primary_key = inspector.get_pk_constraint(
+            "knowledge_claim_evidence"
+        )
+        assert association_primary_key["constrained_columns"] == [
+            "claim_id",
+            "evidence_id",
+        ]
+
+        association_foreign_keys = inspector.get_foreign_keys(
+            "knowledge_claim_evidence"
+        )
+
+        claim_foreign_key = next(
+            fk
+            for fk in association_foreign_keys
+            if fk["constrained_columns"] == ["claim_id"]
+        )
+        evidence_foreign_key = next(
+            fk
+            for fk in association_foreign_keys
+            if fk["constrained_columns"] == ["evidence_id"]
+        )
+
+        assert claim_foreign_key["referred_table"] == "knowledge_claims"
+        assert claim_foreign_key["referred_columns"] == ["id"]
+        assert claim_foreign_key.get("options", {}).get("ondelete") == "CASCADE"
+
+        assert evidence_foreign_key["referred_table"] == "evidence"
+        assert evidence_foreign_key["referred_columns"] == ["id"]
+        assert evidence_foreign_key.get("options", {}).get("ondelete") == "CASCADE"
+
+        with engine.connect() as connection:
+            revision = connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one()
+
+        assert revision == "a393cc967881"
 
     finally:
         engine.dispose()

@@ -5,12 +5,41 @@ domain data.
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy import Enum as SQLAlchemyEnum
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from quilchoom.domain.knowledge_claim import ClaimConfidence, ClaimStatus
 
 
 class Base(DeclarativeBase):
     pass
+
+
+knowledge_claim_evidence = Table(
+    "knowledge_claim_evidence",
+    Base.metadata,
+    Column(
+        "claim_id",
+        ForeignKey("knowledge_claims.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "evidence_id",
+        ForeignKey("evidence.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
 
 
 class ProjectModel(Base):
@@ -96,4 +125,42 @@ class EvidenceModel(Base):
         "metadata",
         JSON,
         nullable=True,
+    )
+
+    claims: Mapped[list[KnowledgeClaimModel]] = relationship(
+        secondary=knowledge_claim_evidence,
+        back_populates="evidence",
+    )
+
+
+def ValuedEnum(enum_cls: type[ClaimConfidence | ClaimStatus]) -> SQLAlchemyEnum:
+    return SQLAlchemyEnum(enum_cls, values_callable=lambda cls: [m.value for m in cls])
+
+
+class KnowledgeClaimModel(Base):
+    __tablename__ = "knowledge_claims"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        nullable=False,
+    )
+    project_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("projects.id"),
+        nullable=False,
+    )
+    statement: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[ClaimConfidence] = mapped_column(
+        ValuedEnum(ClaimConfidence),
+        nullable=False,
+    )
+    status: Mapped[ClaimStatus] = mapped_column(
+        ValuedEnum(ClaimStatus),
+        nullable=False,
+    )
+
+    evidence: Mapped[list[EvidenceModel]] = relationship(
+        secondary=knowledge_claim_evidence,
+        back_populates="claims",
     )

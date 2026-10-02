@@ -195,3 +195,77 @@ def test_evidence_model_defines_metadata_as_json():
     )
 
     assert isinstance(metadata_type, JSON)
+
+
+def test_knowledge_claim_model_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    tables = inspector.get_table_names()
+
+    assert "knowledge_claims" in tables
+
+    columns = inspector.get_columns("knowledge_claims")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == [
+        "id",
+        "project_id",
+        "statement",
+        "confidence",
+        "status",
+    ]
+
+    pk_cols = inspector.get_pk_constraint("knowledge_claims")["constrained_columns"]
+    assert pk_cols == ["id"]
+
+    foreign_keys = inspector.get_foreign_keys("knowledge_claims")
+    project_fk = next(
+        fk for fk in foreign_keys if fk["constrained_columns"] == ["project_id"]
+    )
+
+    assert project_fk["referred_table"] == "projects"
+    assert project_fk["referred_columns"] == ["id"]
+
+
+def test_knowledge_claim_model_defines_expected_nullability():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    columns = inspector.get_columns("knowledge_claims")
+    nullability = {column["name"]: column["nullable"] for column in columns}
+
+    assert nullability["id"] is False
+    assert nullability["project_id"] is False
+    assert nullability["statement"] is False
+    assert nullability["confidence"] is False
+    assert nullability["status"] is False
+
+
+def test_knowledge_claim_evidence_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+
+    columns = inspector.get_columns("knowledge_claim_evidence")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == ["claim_id", "evidence_id"]
+
+    pk_cols = inspector.get_pk_constraint("knowledge_claim_evidence")[
+        "constrained_columns"
+    ]
+    assert set(pk_cols) == {"claim_id", "evidence_id"}
+
+    foreign_keys = inspector.get_foreign_keys("knowledge_claim_evidence")
+    referenced_tables = {
+        fk["referred_table"]: fk["constrained_columns"] for fk in foreign_keys
+    }
+
+    assert referenced_tables == {
+        "knowledge_claims": ["claim_id"],
+        "evidence": ["evidence_id"],
+    }
