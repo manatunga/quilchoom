@@ -13,6 +13,7 @@ from quilchoom.application.errors import (
     SelfReplacementError,
 )
 from quilchoom.domain.knowledge_claim import (
+    ClaimBasis,
     ClaimConfidence,
     ClaimStatus,
     KnowledgeClaim,
@@ -30,6 +31,7 @@ def test_apply_correction_with_replacement():
     target_claim = KnowledgeClaim(
         project_id=project_id,
         statement="Original interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -37,6 +39,7 @@ def test_apply_correction_with_replacement():
     replacement_claim = KnowledgeClaim(
         project_id=project_id,
         statement="Corrected interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -76,6 +79,7 @@ def test_apply_correction_without_replacement():
     target_claim = KnowledgeClaim(
         project_id=project_id,
         statement="Unsupported interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -129,6 +133,7 @@ def test_apply_correction_rejects_target_from_different_project():
     target_claim = KnowledgeClaim(
         project_id=uuid4(),
         statement="Original interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -157,6 +162,7 @@ def test_apply_correction_rejects_missing_replacement_claim():
     target_claim = KnowledgeClaim(
         project_id=project_id,
         statement="Original interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -190,6 +196,7 @@ def test_apply_correction_rejects_replacement_from_different_project():
     target_claim = KnowledgeClaim(
         project_id=project_id,
         statement="Original interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -197,6 +204,7 @@ def test_apply_correction_rejects_replacement_from_different_project():
     replacement_claim = KnowledgeClaim(
         project_id=uuid4(),
         statement="Replacement interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -229,6 +237,7 @@ def test_apply_correction_rejects_self_replacement():
     target_claim = KnowledgeClaim(
         project_id=project_id,
         statement="Original interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],

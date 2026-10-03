@@ -8,6 +8,11 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 
+class ClaimBasis(str, Enum):
+    OBSERVATION = "observation"
+    INFERENCE = "inference"
+
+
 class ClaimConfidence(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
@@ -24,6 +29,7 @@ class KnowledgeClaim(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     project_id: UUID
     statement: str
+    basis: ClaimBasis
     confidence: ClaimConfidence
     status: ClaimStatus
     evidence_ids: list[UUID] = Field(min_length=1)

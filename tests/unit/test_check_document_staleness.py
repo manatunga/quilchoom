@@ -12,6 +12,7 @@ from quilchoom.application.check_document_staleness import (
 )
 from quilchoom.domain.document import DocumentVersion, DocumentVersionOrigin
 from quilchoom.domain.knowledge_claim import (
+    ClaimBasis,
     ClaimConfidence,
     ClaimStatus,
     KnowledgeClaim,
@@ -26,6 +27,7 @@ def test_document_version_is_not_stale_when_all_claims_are_active():
     first_claim = KnowledgeClaim(
         project_id=project_id,
         statement="First active claim",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -33,6 +35,7 @@ def test_document_version_is_not_stale_when_all_claims_are_active():
     second_claim = KnowledgeClaim(
         project_id=project_id,
         statement="Second active claim",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[uuid4()],
@@ -61,6 +64,7 @@ def test_document_version_is_stale_when_claim_is_corrected():
     claim = KnowledgeClaim(
         project_id=project_id,
         statement="Corrected claim",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.CORRECTED,
         evidence_ids=[uuid4()],
@@ -86,6 +90,7 @@ def test_document_version_is_stale_when_claim_is_invalidated():
     claim = KnowledgeClaim(
         project_id=project_id,
         statement="Invalidated claim",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.INVALIDATED,
         evidence_ids=[uuid4()],

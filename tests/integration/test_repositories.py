@@ -19,6 +19,7 @@ from quilchoom.domain.document import (
 from quilchoom.domain.event import Event
 from quilchoom.domain.evidence import Evidence
 from quilchoom.domain.knowledge_claim import (
+    ClaimBasis,
     ClaimConfidence,
     ClaimStatus,
     KnowledgeClaim,
@@ -389,6 +390,7 @@ def test_save_and_get_knowledge_claim(tmp_path):
     claim = KnowledgeClaim(
         project_id=project.id,
         statement="The project added knowledge claim persistence.",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -441,6 +443,7 @@ def test_knowledge_claim_supports_multiple_evidence(tmp_path):
     claim = KnowledgeClaim(
         project_id=project.id,
         statement="A change is supported by multiple pieces of evidence.",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence_a.id, evidence_b.id],
@@ -467,6 +470,7 @@ def test_knowledge_claim_save_rejects_missing_evidence(tmp_path):
     claim = KnowledgeClaim(
         project_id=project.id,
         statement="Unsupported claim.",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.LOW,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[missing_evidence_id],
@@ -510,6 +514,7 @@ def test_knowledge_claim_save_rejects_evidence_from_different_project(tmp_path):
     claim = KnowledgeClaim(
         project_id=project.id,
         statement="Claim for the first project.",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -562,6 +567,7 @@ def test_list_knowledge_claims_for_project(tmp_path):
     claim_a = KnowledgeClaim(
         project_id=project.id,
         statement="Git capture was made idempotent",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence_a.id],
@@ -569,6 +575,7 @@ def test_list_knowledge_claims_for_project(tmp_path):
     claim_b = KnowledgeClaim(
         project_id=other_project.id,
         statement="Alembic migrations were added for SQLAlchemy models",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.INVALIDATED,
         evidence_ids=[evidence_b.id],
@@ -613,6 +620,7 @@ def test_save_and_get_correction(tmp_path):
     target_claim = KnowledgeClaim(
         project_id=project.id,
         statement="Original interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -620,6 +628,7 @@ def test_save_and_get_correction(tmp_path):
     replacement_claim = KnowledgeClaim(
         project_id=project.id,
         statement="Corrected interpretation",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -695,6 +704,7 @@ def test_list_corrections_for_project(tmp_path):
     target_claim = KnowledgeClaim(
         project_id=project.id,
         statement="Original interpretation",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -702,6 +712,7 @@ def test_list_corrections_for_project(tmp_path):
     other_target_claim = KnowledgeClaim(
         project_id=other_project.id,
         statement="Other interpretation",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[other_evidence.id],
@@ -758,6 +769,7 @@ def test_save_correction_with_claim_status_update(tmp_path):
     target_claim = KnowledgeClaim(
         project_id=project.id,
         statement="Original interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -765,6 +777,7 @@ def test_save_correction_with_claim_status_update(tmp_path):
     replacement_claim = KnowledgeClaim(
         project_id=project.id,
         statement="Corrected interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -822,6 +835,7 @@ def test_save_correction_with_claim_invalidation(tmp_path):
     target_claim = KnowledgeClaim(
         project_id=project.id,
         statement="Unsupported interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -899,6 +913,7 @@ def test_save_correction_with_status_update_rolls_back_on_failure(tmp_path):
     target_claim = KnowledgeClaim(
         project_id=project.id,
         statement="Original interpretation",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.MEDIUM,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -1116,6 +1131,7 @@ def test_document_version_supports_claim_provenance(tmp_path):
     claim = KnowledgeClaim(
         project_id=project.id,
         statement="The project added documentation support.",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],
@@ -1223,6 +1239,7 @@ def test_document_version_save_rejects_claim_from_different_project(tmp_path):
     claim = KnowledgeClaim(
         project_id=other_project.id,
         statement="Claim belonging to another project.",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence.id],

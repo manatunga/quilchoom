@@ -21,7 +21,11 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from quilchoom.domain.document import DocumentVersionOrigin
-from quilchoom.domain.knowledge_claim import ClaimConfidence, ClaimStatus
+from quilchoom.domain.knowledge_claim import (
+    ClaimBasis,
+    ClaimConfidence,
+    ClaimStatus,
+)
 
 
 class Base(DeclarativeBase):
@@ -152,7 +156,7 @@ class EvidenceModel(Base):
 
 
 def ValuedEnum(
-    enum_cls: type[ClaimConfidence | ClaimStatus | DocumentVersionOrigin],
+    enum_cls: type[ClaimBasis | ClaimConfidence | ClaimStatus | DocumentVersionOrigin],
 ) -> SQLAlchemyEnum:
     return SQLAlchemyEnum(enum_cls, values_callable=lambda cls: [m.value for m in cls])
 
@@ -171,6 +175,10 @@ class KnowledgeClaimModel(Base):
         nullable=False,
     )
     statement: Mapped[str] = mapped_column(Text, nullable=False)
+    basis: Mapped[ClaimBasis] = mapped_column(
+        ValuedEnum(ClaimBasis),
+        nullable=False,
+    )
     confidence: Mapped[ClaimConfidence] = mapped_column(
         ValuedEnum(ClaimConfidence),
         nullable=False,

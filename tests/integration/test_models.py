@@ -213,6 +213,7 @@ def test_knowledge_claim_model_defines_expected_schema():
         "id",
         "project_id",
         "statement",
+        "basis",
         "confidence",
         "status",
     ]

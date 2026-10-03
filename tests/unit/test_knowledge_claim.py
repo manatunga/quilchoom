@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from quilchoom.domain.knowledge_claim import (
+    ClaimBasis,
     ClaimConfidence,
     ClaimStatus,
     KnowledgeClaim,
@@ -21,6 +22,7 @@ def test_knowledge_claim_creation():
     claim = KnowledgeClaim(
         project_id=project_id,
         statement="Git capture was made idempotent",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence_id],
@@ -42,6 +44,7 @@ def test_knowledge_claim_generates_unique_ids():
     claim_1 = KnowledgeClaim(
         project_id=project_id,
         statement="Git capture was made idempotent",
+        basis=ClaimBasis.OBSERVATION,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence_id1],
@@ -49,6 +52,7 @@ def test_knowledge_claim_generates_unique_ids():
     claim_2 = KnowledgeClaim(
         project_id=project_id,
         statement="Git capture was made idempotent",
+        basis=ClaimBasis.INFERENCE,
         confidence=ClaimConfidence.HIGH,
         status=ClaimStatus.ACTIVE,
         evidence_ids=[evidence_id2],
@@ -64,6 +68,7 @@ def test_knowledge_claim_requires_evidence():
         KnowledgeClaim(
             project_id=project_id,
             statement="Git capture was made idempotent",
+            basis=ClaimBasis.OBSERVATION,
             confidence=ClaimConfidence.HIGH,
             status=ClaimStatus.ACTIVE,
             evidence_ids=[],
@@ -80,6 +85,7 @@ def test_knowledge_claim_requires_valid_fields():
     assert set(missing_fields) == {
         "project_id",
         "statement",
+        "basis",
         "confidence",
         "status",
         "evidence_ids",

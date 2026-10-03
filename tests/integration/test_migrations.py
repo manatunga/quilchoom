@@ -3,8 +3,10 @@ Integration tests for Quilchoom's database migrations.
 """
 
 import pytest
+from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
+from alembic import command
 from quilchoom.infrastructure.database.connection import initialize_database
 from quilchoom.infrastructure.database.errors import DatabaseMigrationError
 from quilchoom.infrastructure.database.migrations import upgrade_database
@@ -27,7 +29,7 @@ def test_upgrade_creates_projects_table(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert revision == "b746cacea516"
+        assert revision == "8b14085b8c73"
 
 
 def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
@@ -49,7 +51,7 @@ def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert revision == "b746cacea516"
+        assert revision == "8b14085b8c73"
 
 
 def test_upgrade_database_rejects_incompatible_legacy_database(tmp_path):
@@ -128,7 +130,7 @@ def test_upgrade_database_creates_events_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "b746cacea516"
+        assert revision == "8b14085b8c73"
 
     finally:
         engine.dispose()
@@ -192,7 +194,7 @@ def test_upgrade_database_creates_evidence_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "b746cacea516"
+        assert revision == "8b14085b8c73"
 
     finally:
         engine.dispose()
@@ -221,6 +223,7 @@ def test_upgrade_database_creates_knowledge_claim_tables(tmp_path):
             "statement",
             "confidence",
             "status",
+            "basis",
         ]
 
         claim_primary_key = inspector.get_pk_constraint("knowledge_claims")
@@ -277,7 +280,76 @@ def test_upgrade_database_creates_knowledge_claim_tables(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "b746cacea516"
+        assert revision == "8b14085b8c73"
+
+    finally:
+        engine.dispose()
+
+
+def test_knowledge_claim_basis_migration_backfills_existing_claims(tmp_path):
+    database_path = tmp_path / "quilchoom.db"
+    database_url = f"sqlite:///{database_path.resolve()}"
+
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
+
+    command.upgrade(config, "b746cacea516")
+
+    engine = create_engine(database_url)
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("""
+                    INSERT INTO projects (
+                        id,
+                        name,
+                        repository_path,
+                        created_at,
+                        updated_at
+                    )
+                    VALUES (
+                        'project-1',
+                        'Test Project',
+                        '/tmp/test-project',
+                        '2026-10-03 00:00:00',
+                        '2026-10-03 00:00:00'
+                    )
+                """)
+            )
+
+            connection.execute(
+                text("""
+                    INSERT INTO knowledge_claims (
+                        id,
+                        project_id,
+                        statement,
+                        confidence,
+                        status
+                    )
+                    VALUES (
+                        'claim-1',
+                        'project-1',
+                        'Existing claim',
+                        'high',
+                        'active'
+                    )
+                """)
+            )
+
+        command.upgrade(config, "head")
+
+        with engine.connect() as connection:
+            row = connection.execute(
+                text("""
+                    SELECT statement, basis
+                    FROM knowledge_claims
+                    WHERE id = 'claim-1'
+                """)
+            ).one()
+
+        assert row.statement == "Existing claim"
+        assert row.basis == "observation"
 
     finally:
         engine.dispose()
@@ -345,7 +417,7 @@ def test_upgrade_database_creates_corrections_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "b746cacea516"
+        assert revision == "8b14085b8c73"
 
     finally:
         engine.dispose()
@@ -487,7 +559,7 @@ def test_upgrade_database_creates_document_tables(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "b746cacea516"
+        assert revision == "8b14085b8c73"
 
     finally:
         engine.dispose()
