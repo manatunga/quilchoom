@@ -13,12 +13,14 @@ from quilchoom.domain.correction import Correction
 from quilchoom.domain.document import Document, DocumentVersion
 from quilchoom.domain.event import Event
 from quilchoom.domain.evidence import Evidence
+from quilchoom.domain.interpretation import InterpretationRun
 from quilchoom.domain.knowledge_claim import ClaimStatus, KnowledgeClaim
 from quilchoom.domain.project import Project
 from quilchoom.infrastructure.database.errors import (
     DocumentNotFoundError,
     EvidenceNotFoundError,
     EvidenceProjectMismatchError,
+    InvalidInterpretationRunError,
     KnowledgeClaimNotFoundError,
     KnowledgeClaimProjectMismatchError,
 )
@@ -28,6 +30,7 @@ from quilchoom.infrastructure.database.models import (
     DocumentVersionModel,
     EventModel,
     EvidenceModel,
+    InterpretationRunModel,
     KnowledgeClaimModel,
     ProjectModel,
 )
@@ -598,3 +601,123 @@ class DocumentVersionRepository:
             version = self._to_domain(model)
 
             return version
+
+
+class InterpretationRunRepository:
+    def __init__(self, engine: Engine):
+        self.engine = engine
+
+    def _to_domain(self, model: InterpretationRunModel) -> InterpretationRun:
+        return InterpretationRun(
+            id=UUID(model.id),
+            project_id=UUID(model.project_id),
+            evidence_ids=[UUID(evidence.id) for evidence in model.evidence],
+            claim_ids=[UUID(claim.id) for claim in model.claims],
+            created_at=model.created_at.replace(tzinfo=UTC),
+        )
+
+    def list_interpreted_evidence_ids(self, project_id: UUID) -> set[UUID]:
+        with Session(self.engine) as session:
+            evidence_ids = session.scalars(
+                select(EvidenceModel.id)
+                .join(InterpretationRunModel.evidence)
+                .where(InterpretationRunModel.project_id == str(project_id))
+            ).all()
+
+            return {UUID(evidence_id) for evidence_id in evidence_ids}
+
+    def save_with_claims(
+        self,
+        run: InterpretationRun,
+        claims: list[KnowledgeClaim],
+    ) -> None:
+        with Session(self.engine) as session:
+            evidence_models = session.scalars(
+                select(EvidenceModel).where(
+                    EvidenceModel.id.in_(
+                        [str(evidence_id) for evidence_id in run.evidence_ids]
+                    )
+                )
+            ).all()
+
+            found_evidence_ids = {UUID(model.id) for model in evidence_models}
+            missing_evidence_ids = set(run.evidence_ids) - found_evidence_ids
+
+            if missing_evidence_ids:
+                raise EvidenceNotFoundError(
+                    "Evidence not found: "
+                    + ", ".join(
+                        str(evidence_id) for evidence_id in missing_evidence_ids
+                    )
+                )
+
+            mismatched_evidence_ids = [
+                UUID(model.id)
+                for model in evidence_models
+                if model.project_id != str(run.project_id)
+            ]
+
+            if mismatched_evidence_ids:
+                raise EvidenceProjectMismatchError(
+                    "Evidence belongs to a different project: "
+                    + ", ".join(
+                        str(evidence_id) for evidence_id in mismatched_evidence_ids
+                    )
+                )
+
+            expected_claim_ids = set(run.claim_ids)
+            actual_claim_ids = {claim.id for claim in claims}
+
+            if actual_claim_ids != expected_claim_ids:
+                raise InvalidInterpretationRunError(
+                    "Interpretation run claim IDs do not match supplied claims"
+                )
+
+            run_evidence_ids = set(run.evidence_ids)
+
+            for claim in claims:
+                if claim.project_id != run.project_id:
+                    raise InvalidInterpretationRunError(
+                        f"Claim belongs to a different project: {claim.id}"
+                    )
+
+                invalid_evidence_ids = set(claim.evidence_ids) - run_evidence_ids
+
+                if invalid_evidence_ids:
+                    raise InvalidInterpretationRunError(
+                        "Claim references evidence outside the interpretation run: "
+                        + ", ".join(
+                            str(evidence_id) for evidence_id in invalid_evidence_ids
+                        )
+                    )
+            evidence_by_id = {UUID(model.id): model for model in evidence_models}
+
+            claim_models: list[KnowledgeClaimModel] = []
+
+            for claim in claims:
+                claim_evidence_models = [
+                    evidence_by_id[evidence_id] for evidence_id in claim.evidence_ids
+                ]
+
+                claim_model = KnowledgeClaimModel(
+                    id=str(claim.id),
+                    project_id=str(claim.project_id),
+                    statement=claim.statement,
+                    basis=claim.basis,
+                    confidence=claim.confidence,
+                    status=claim.status,
+                    evidence=claim_evidence_models,
+                )
+                claim_models.append(claim_model)
+
+            run_model = InterpretationRunModel(
+                id=str(run.id),
+                project_id=str(run.project_id),
+                created_at=run.created_at.replace(tzinfo=None),
+                evidence=evidence_models,
+                claims=claim_models,
+            )
+
+            session.add_all(claim_models)
+            session.add(run_model)
+            session.commit()

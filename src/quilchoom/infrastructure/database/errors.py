@@ -25,3 +25,7 @@ class DocumentNotFoundError(Exception):
 
 class KnowledgeClaimProjectMismatchError(Exception):
     """Raised when a knowledge claim belongs to a different project."""
+
+
+class InvalidInterpretationRunError(Exception):
+    """Raised when an interpretation run is inconsistent with its claims."""

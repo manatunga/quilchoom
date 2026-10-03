@@ -18,6 +18,7 @@ from quilchoom.domain.document import (
 )
 from quilchoom.domain.event import Event
 from quilchoom.domain.evidence import Evidence
+from quilchoom.domain.interpretation import InterpretationRun
 from quilchoom.domain.knowledge_claim import (
     ClaimBasis,
     ClaimConfidence,
@@ -29,6 +30,7 @@ from quilchoom.infrastructure.database.errors import (
     DocumentNotFoundError,
     EvidenceNotFoundError,
     EvidenceProjectMismatchError,
+    InvalidInterpretationRunError,
     KnowledgeClaimNotFoundError,
     KnowledgeClaimProjectMismatchError,
 )
@@ -39,6 +41,7 @@ from quilchoom.infrastructure.database.repositories import (
     DocumentVersionRepository,
     EventRepository,
     EvidenceRepository,
+    InterpretationRunRepository,
     KnowledgeClaimRepository,
     ProjectRepository,
 )
@@ -1356,3 +1359,426 @@ def test_get_latest_document_version_returns_none_when_no_versions(tmp_path):
     version_repo = DocumentVersionRepository(engine)
 
     assert version_repo.get_latest(document.id) is None
+
+
+def test_interpretation_run_save_with_claims_persists_claims_and_provenance(
+    tmp_path,
+):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+
+    evidence_repo = EvidenceRepository(engine)
+
+    evidence_a = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="first diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    evidence_b = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="second diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+
+    evidence_repo.save(evidence_a)
+    evidence_repo.save(evidence_b)
+
+    claim_a = KnowledgeClaim(
+        project_id=project.id,
+        statement="The project added interpretation persistence.",
+        basis=ClaimBasis.OBSERVATION,
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence_a.id],
+    )
+    claim_b = KnowledgeClaim(
+        project_id=project.id,
+        statement="The changes support knowledge interpretation.",
+        basis=ClaimBasis.INFERENCE,
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence_a.id, evidence_b.id],
+    )
+
+    run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[evidence_a.id, evidence_b.id],
+        claim_ids=[claim_a.id, claim_b.id],
+    )
+
+    run_repo = InterpretationRunRepository(engine)
+    run_repo.save_with_claims(run, [claim_a, claim_b])
+
+    claim_repo = KnowledgeClaimRepository(engine)
+
+    retrieved_claim_a = claim_repo.get_by_id(claim_a.id)
+    retrieved_claim_b = claim_repo.get_by_id(claim_b.id)
+
+    assert retrieved_claim_a is not None
+    assert retrieved_claim_b is not None
+
+    assert set(retrieved_claim_a.evidence_ids) == {evidence_a.id}
+    assert set(retrieved_claim_b.evidence_ids) == {
+        evidence_a.id,
+        evidence_b.id,
+    }
+
+    assert run_repo.list_interpreted_evidence_ids(project.id) == {
+        evidence_a.id,
+        evidence_b.id,
+    }
+
+
+def test_interpretation_run_save_with_zero_claims_marks_evidence_interpreted(
+    tmp_path,
+):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="diff with no useful claim",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    EvidenceRepository(engine).save(evidence)
+
+    run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[evidence.id],
+        claim_ids=[],
+    )
+
+    run_repo = InterpretationRunRepository(engine)
+    run_repo.save_with_claims(run, [])
+
+    assert run_repo.list_interpreted_evidence_ids(project.id) == {evidence.id}
+
+
+def test_list_interpreted_evidence_ids_is_scoped_to_project(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(
+        name="my_project",
+        repository_path=tmp_path / "my_project",
+    )
+    other_project = Project(
+        name="other_project",
+        repository_path=tmp_path / "other_project",
+    )
+
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+    project_repo.save(other_project)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="project diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    other_evidence = Evidence(
+        project_id=other_project.id,
+        type="git_diff",
+        content="other project diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+
+    evidence_repo = EvidenceRepository(engine)
+    evidence_repo.save(evidence)
+    evidence_repo.save(other_evidence)
+
+    run_repo = InterpretationRunRepository(engine)
+
+    run_repo.save_with_claims(
+        InterpretationRun(
+            project_id=project.id,
+            evidence_ids=[evidence.id],
+        ),
+        [],
+    )
+    run_repo.save_with_claims(
+        InterpretationRun(
+            project_id=other_project.id,
+            evidence_ids=[other_evidence.id],
+        ),
+        [],
+    )
+
+    assert run_repo.list_interpreted_evidence_ids(project.id) == {evidence.id}
+    assert run_repo.list_interpreted_evidence_ids(other_project.id) == {
+        other_evidence.id
+    }
+
+
+def test_interpretation_run_save_rejects_missing_evidence(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+
+    missing_evidence_id = uuid4()
+
+    run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[missing_evidence_id],
+    )
+
+    run_repo = InterpretationRunRepository(engine)
+
+    with pytest.raises(EvidenceNotFoundError):
+        run_repo.save_with_claims(run, [])
+
+    assert run_repo.list_interpreted_evidence_ids(project.id) == set()
+
+
+def test_interpretation_run_save_rejects_evidence_from_different_project(
+    tmp_path,
+):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(
+        name="my_project",
+        repository_path=tmp_path / "my_project",
+    )
+    other_project = Project(
+        name="other_project",
+        repository_path=tmp_path / "other_project",
+    )
+
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+    project_repo.save(other_project)
+
+    evidence = Evidence(
+        project_id=other_project.id,
+        type="git_diff",
+        content="unrelated diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    evidence_repo = EvidenceRepository(engine)
+    evidence_repo.save(evidence)
+
+    run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[evidence.id],
+    )
+
+    run_repo = InterpretationRunRepository(engine)
+
+    with pytest.raises(EvidenceProjectMismatchError):
+        run_repo.save_with_claims(run, [])
+
+    assert run_repo.list_interpreted_evidence_ids(project.id) == set()
+
+
+def test_interpretation_run_save_rejects_claim_id_mismatch(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="test diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    evidence_repo = EvidenceRepository(engine)
+    evidence_repo.save(evidence)
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="A claim not declared by the run.",
+        basis=ClaimBasis.INFERENCE,
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+
+    run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[evidence.id],
+        claim_ids=[],
+    )
+
+    run_repo = InterpretationRunRepository(engine)
+
+    with pytest.raises(InvalidInterpretationRunError):
+        run_repo.save_with_claims(run, [claim])
+
+    assert KnowledgeClaimRepository(engine).get_by_id(claim.id) is None
+
+
+def test_interpretation_run_save_rejects_claim_from_different_project(
+    tmp_path,
+):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(
+        name="my_project",
+        repository_path=tmp_path / "my_project",
+    )
+    other_project = Project(
+        name="other_project",
+        repository_path=tmp_path / "other_project",
+    )
+
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+    project_repo.save(other_project)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="test diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    EvidenceRepository(engine).save(evidence)
+
+    claim = KnowledgeClaim(
+        project_id=other_project.id,
+        statement="Claim belonging to another project.",
+        basis=ClaimBasis.INFERENCE,
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+
+    run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[evidence.id],
+        claim_ids=[claim.id],
+    )
+
+    run_repo = InterpretationRunRepository(engine)
+
+    with pytest.raises(InvalidInterpretationRunError):
+        run_repo.save_with_claims(run, [claim])
+
+    assert KnowledgeClaimRepository(engine).get_by_id(claim.id) is None
+
+
+def test_interpretation_run_save_rejects_claim_evidence_outside_run(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+
+    evidence_repo = EvidenceRepository(engine)
+
+    run_evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="interpreted diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    outside_evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="different diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+
+    evidence_repo.save(run_evidence)
+    evidence_repo.save(outside_evidence)
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="Claim cites evidence outside this run.",
+        basis=ClaimBasis.INFERENCE,
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[outside_evidence.id],
+    )
+
+    run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[run_evidence.id],
+        claim_ids=[claim.id],
+    )
+
+    run_repo = InterpretationRunRepository(engine)
+
+    with pytest.raises(InvalidInterpretationRunError):
+        run_repo.save_with_claims(run, [claim])
+
+    assert KnowledgeClaimRepository(engine).get_by_id(claim.id) is None
+
+
+def test_interpretation_run_save_with_claims_rolls_back_on_failure(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="test diff",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    evidence_repo = EvidenceRepository(engine)
+    evidence_repo.save(evidence)
+
+    run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[evidence.id],
+    )
+    run_repo = InterpretationRunRepository(engine)
+    run_repo.save_with_claims(run, [])
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="This claim should be rolled back.",
+        basis=ClaimBasis.INFERENCE,
+        confidence=ClaimConfidence.MEDIUM,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+
+    second_run = InterpretationRun(
+        project_id=project.id,
+        evidence_ids=[evidence.id],
+        claim_ids=[claim.id],
+    )
+
+    with pytest.raises(IntegrityError):
+        run_repo.save_with_claims(second_run, [claim])
+
+    claim_repo = KnowledgeClaimRepository(engine)
+    retrieved_claim = claim_repo.get_by_id(claim.id)
+
+    assert retrieved_claim is None
