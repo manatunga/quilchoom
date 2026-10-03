@@ -17,3 +17,11 @@ class CorrectionProjectMismatchError(Exception):
 
 class SelfReplacementError(Exception):
     """Raised when a claim is used as its own replacement."""
+
+
+class InterpretationProjectMismatchError(Exception):
+    """Raised when interpretation inputs belong to different projects."""
+
+
+class InvalidCandidateEvidenceError(Exception):
+    """Raised when an interpretation candidate references unavailable evidence."""
