@@ -493,3 +493,103 @@ def test_document_version_claims_defines_expected_schema():
         "document_versions": ["document_version_id"],
         "knowledge_claims": ["claim_id"],
     }
+
+
+def test_interpretation_run_model_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+    tables = inspector.get_table_names()
+
+    assert "interpretation_runs" in tables
+
+    columns = inspector.get_columns("interpretation_runs")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == [
+        "id",
+        "project_id",
+        "created_at",
+    ]
+
+    pk_cols = inspector.get_pk_constraint("interpretation_runs")["constrained_columns"]
+
+    assert pk_cols == ["id"]
+
+    foreign_keys = inspector.get_foreign_keys("interpretation_runs")
+    project_foreign_key = next(
+        fk for fk in foreign_keys if fk["constrained_columns"] == ["project_id"]
+    )
+
+    assert project_foreign_key["referred_table"] == "projects"
+    assert project_foreign_key["referred_columns"] == ["id"]
+
+    nullability = {column["name"]: column["nullable"] for column in columns}
+
+    assert nullability["id"] is False
+    assert nullability["project_id"] is False
+    assert nullability["created_at"] is False
+
+
+def test_interpretation_run_evidence_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+
+    columns = inspector.get_columns("interpretation_run_evidence")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == ["interpretation_run_id", "evidence_id"]
+
+    pk_cols = inspector.get_pk_constraint("interpretation_run_evidence")[
+        "constrained_columns"
+    ]
+
+    assert set(pk_cols) == {"interpretation_run_id", "evidence_id"}
+
+    foreign_keys = inspector.get_foreign_keys("interpretation_run_evidence")
+    referenced_tables = {
+        fk["referred_table"]: fk["constrained_columns"] for fk in foreign_keys
+    }
+
+    assert referenced_tables == {
+        "interpretation_runs": ["interpretation_run_id"],
+        "evidence": ["evidence_id"],
+    }
+
+    unique_constraints = inspector.get_unique_constraints("interpretation_run_evidence")
+
+    assert any(
+        constraint["column_names"] == ["evidence_id"]
+        for constraint in unique_constraints
+    )
+
+
+def test_interpretation_run_claims_defines_expected_schema():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    inspector = inspect(db_engine)
+
+    columns = inspector.get_columns("interpretation_run_claims")
+    column_names = [column["name"] for column in columns]
+
+    assert column_names == ["interpretation_run_id", "claim_id"]
+
+    pk_cols = inspector.get_pk_constraint("interpretation_run_claims")[
+        "constrained_columns"
+    ]
+
+    assert set(pk_cols) == {"interpretation_run_id", "claim_id"}
+
+    foreign_keys = inspector.get_foreign_keys("interpretation_run_claims")
+    referenced_tables = {
+        fk["referred_table"]: fk["constrained_columns"] for fk in foreign_keys
+    }
+
+    assert referenced_tables == {
+        "interpretation_runs": ["interpretation_run_id"],
+        "knowledge_claims": ["claim_id"],
+    }

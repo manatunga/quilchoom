@@ -60,6 +60,40 @@ document_version_claims = Table(
         "claim_id",
         ForeignKey("knowledge_claims.id", ondelete="CASCADE"),
         primary_key=True,
+        unique=True,
+    ),
+)
+
+
+interpretation_run_evidence = Table(
+    "interpretation_run_evidence",
+    Base.metadata,
+    Column(
+        "interpretation_run_id",
+        ForeignKey("interpretation_runs.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "evidence_id",
+        ForeignKey("evidence.id", ondelete="CASCADE"),
+        primary_key=True,
+        unique=True,
+    ),
+)
+
+
+interpretation_run_claims = Table(
+    "interpretation_run_claims",
+    Base.metadata,
+    Column(
+        "interpretation_run_id",
+        ForeignKey("interpretation_runs.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "claim_id",
+        ForeignKey("knowledge_claims.id", ondelete="CASCADE"),
+        primary_key=True,
     ),
 )
 
@@ -153,6 +187,10 @@ class EvidenceModel(Base):
         secondary=knowledge_claim_evidence,
         back_populates="evidence",
     )
+    interpretation_runs: Mapped[list[InterpretationRunModel]] = relationship(
+        secondary=interpretation_run_evidence,
+        back_populates="evidence",
+    )
 
 
 def ValuedEnum(
@@ -194,6 +232,10 @@ class KnowledgeClaimModel(Base):
     )
     document_versions: Mapped[list[DocumentVersionModel]] = relationship(
         secondary=document_version_claims,
+        back_populates="claims",
+    )
+    interpretation_runs: Mapped[list[InterpretationRunModel]] = relationship(
+        secondary=interpretation_run_claims,
         back_populates="claims",
     )
 
@@ -289,4 +331,31 @@ class DocumentVersionModel(Base):
     claims: Mapped[list[KnowledgeClaimModel]] = relationship(
         secondary=document_version_claims,
         back_populates="document_versions",
+    )
+
+
+class InterpretationRunModel(Base):
+    __tablename__ = "interpretation_runs"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        nullable=False,
+    )
+    project_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("projects.id"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+    evidence: Mapped[list[EvidenceModel]] = relationship(
+        secondary=interpretation_run_evidence,
+        back_populates="interpretation_runs",
+    )
+    claims: Mapped[list[KnowledgeClaimModel]] = relationship(
+        secondary=interpretation_run_claims,
+        back_populates="interpretation_runs",
     )
