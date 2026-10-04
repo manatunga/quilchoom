@@ -25,3 +25,11 @@ class InterpretationProjectMismatchError(Exception):
 
 class InvalidCandidateEvidenceError(Exception):
     """Raised when an interpretation candidate references unavailable evidence."""
+
+
+class NoActiveClaimsError(Exception):
+    """Raised when document generation has no active knowledge claims."""
+
+
+class InvalidGeneratedClaimError(Exception):
+    """Raised when generated document provenance references an unavailable claim."""

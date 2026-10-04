@@ -7,16 +7,19 @@ from quilchoom.infrastructure.ai.credentials import (
     resolve_environment_credential,
 )
 from quilchoom.infrastructure.ai.errors import AIConfigurationError
+from quilchoom.infrastructure.ai.llm_document_generator import LLMDocumentGenerator
 from quilchoom.infrastructure.ai.llm_knowledge_interpreter import (
     LLMKnowledgeInterpreter,
 )
 from quilchoom.infrastructure.ai.openai_provider import OpenAIProvider
 from quilchoom.infrastructure.ai.retry import RetryingLLMProvider
+from quilchoom.interfaces.document_generator import DocumentGenerator
 from quilchoom.interfaces.knowledge_interpreter import KnowledgeInterpreter
+from quilchoom.interfaces.llm_provider import LLMProvider
 
 
-def create_knowledge_interpreter(config: AIConfig) -> KnowledgeInterpreter:
-    """Create a configured knowledge interpreter from AI configuration."""
+def _create_llm_provider(config: AIConfig) -> LLMProvider:
+    """Create a configured retrying LLM provider from AI configuration."""
 
     provider_name = config.provider.strip().lower()
 
@@ -30,6 +33,20 @@ def create_knowledge_interpreter(config: AIConfig) -> KnowledgeInterpreter:
         api_key=credential,
         endpoint=config.endpoint,
     )
-    retrying_provider = RetryingLLMProvider(provider)
+    return RetryingLLMProvider(provider)
 
-    return LLMKnowledgeInterpreter(retrying_provider)
+
+def create_knowledge_interpreter(config: AIConfig) -> KnowledgeInterpreter:
+    """Create a configured knowledge interpreter from AI configuration."""
+
+    provider = _create_llm_provider(config)
+
+    return LLMKnowledgeInterpreter(provider)
+
+
+def create_document_generator(config: AIConfig) -> DocumentGenerator:
+    """Create a configured document generator from AI configuration."""
+
+    provider = _create_llm_provider(config)
+
+    return LLMDocumentGenerator(provider)

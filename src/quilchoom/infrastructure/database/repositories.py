@@ -18,8 +18,10 @@ from quilchoom.domain.knowledge_claim import ClaimStatus, KnowledgeClaim
 from quilchoom.domain.project import Project
 from quilchoom.infrastructure.database.errors import (
     DocumentNotFoundError,
+    DocumentVersionMismatchError,
     EvidenceNotFoundError,
     EvidenceProjectMismatchError,
+    InvalidInitialDocumentVersionError,
     InvalidInterpretationRunError,
     KnowledgeClaimNotFoundError,
     KnowledgeClaimProjectMismatchError,
@@ -444,6 +446,60 @@ class DocumentRepository:
                 created_at=document.created_at.replace(tzinfo=None),
             )
             session.add(document_model)
+            session.commit()
+
+    def save_with_initial_version(
+        self,
+        document: Document,
+        version: DocumentVersion,
+    ) -> None:
+        if version.document_id != document.id:
+            raise DocumentVersionMismatchError(
+                f"Version does not belong to this document: {version.document_id}"
+            )
+
+        if version.version_number != 1:
+            raise InvalidInitialDocumentVersionError(
+                f"Initial document version must have version number 1: {version.version_number}"
+            )
+
+        with Session(self.engine) as session:
+            claim_models: list[KnowledgeClaimModel] = []
+
+            for claim_id in version.claim_ids:
+                claim_model = session.get(KnowledgeClaimModel, str(claim_id))
+
+                if claim_model is None:
+                    raise KnowledgeClaimNotFoundError(
+                        f"Knowledge claim not found: {claim_id}"
+                    )
+
+                if claim_model.project_id != str(document.project_id):
+                    raise KnowledgeClaimProjectMismatchError(
+                        f"Knowledge claim belongs to a different project: {claim_id}"
+                    )
+
+                claim_models.append(claim_model)
+
+            document_model = DocumentModel(
+                id=str(document.id),
+                project_id=str(document.project_id),
+                key=document.key,
+                kind=document.kind,
+                created_at=document.created_at.replace(tzinfo=None),
+            )
+            version_model = DocumentVersionModel(
+                id=str(version.id),
+                document_id=str(version.document_id),
+                version_number=version.version_number,
+                content=version.content,
+                origin=version.origin,
+                claims=claim_models,
+                created_at=version.created_at.replace(tzinfo=None),
+            )
+
+            session.add(document_model)
+            session.add(version_model)
             session.commit()
 
     def get_by_id(self, document_id: UUID) -> Document | None:

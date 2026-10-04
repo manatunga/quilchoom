@@ -28,8 +28,10 @@ from quilchoom.domain.knowledge_claim import (
 from quilchoom.domain.project import Project
 from quilchoom.infrastructure.database.errors import (
     DocumentNotFoundError,
+    DocumentVersionMismatchError,
     EvidenceNotFoundError,
     EvidenceProjectMismatchError,
+    InvalidInitialDocumentVersionError,
     InvalidInterpretationRunError,
     KnowledgeClaimNotFoundError,
     KnowledgeClaimProjectMismatchError,
@@ -964,6 +966,237 @@ def test_save_and_get_document(tmp_path):
     assert retrieved == document
 
 
+def test_document_repository_saves_document_with_initial_version(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(engine).save(project)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="diff --git ...",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    EvidenceRepository(engine).save(evidence)
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="The project added documentation support.",
+        basis=ClaimBasis.OBSERVATION,
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+    KnowledgeClaimRepository(engine).save(claim)
+
+    document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    version = DocumentVersion(
+        document_id=document.id,
+        version_number=1,
+        content="# Project",
+        origin=DocumentVersionOrigin.GENERATED,
+        claim_ids=[claim.id],
+    )
+
+    document_repo = DocumentRepository(engine)
+    version_repo = DocumentVersionRepository(engine)
+
+    document_repo.save_with_initial_version(document, version)
+
+    assert document_repo.get_by_id(document.id) == document
+    assert version_repo.get_by_id(version.id) == version
+
+
+def test_document_repository_rolls_back_initial_version_when_document_save_fails(
+    tmp_path,
+):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(engine).save(project)
+
+    existing_document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+
+    document_repo = DocumentRepository(engine)
+    version_repo = DocumentVersionRepository(engine)
+
+    document_repo.save(existing_document)
+
+    new_document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    version = DocumentVersion(
+        document_id=new_document.id,
+        version_number=1,
+        content="# Project",
+        origin=DocumentVersionOrigin.GENERATED,
+    )
+
+    with pytest.raises(IntegrityError):
+        document_repo.save_with_initial_version(new_document, version)
+
+    assert document_repo.get_by_id(new_document.id) is None
+    assert document_repo.get_by_id(existing_document.id) == existing_document
+    assert version_repo.get_by_id(version.id) is None
+
+
+def test_document_repository_rejects_mismatched_initial_version(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(engine).save(project)
+
+    document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    other_document = Document(
+        project_id=project.id,
+        key="architecture",
+        kind="architecture",
+    )
+    version = DocumentVersion(
+        document_id=other_document.id,
+        version_number=1,
+        content="# Project",
+        origin=DocumentVersionOrigin.GENERATED,
+    )
+
+    document_repo = DocumentRepository(engine)
+
+    with pytest.raises(DocumentVersionMismatchError):
+        document_repo.save_with_initial_version(document, version)
+
+    assert document_repo.get_by_id(document.id) is None
+
+
+def test_document_repository_rejects_non_initial_version(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(engine).save(project)
+
+    document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    version = DocumentVersion(
+        document_id=document.id,
+        version_number=2,
+        content="# Project",
+        origin=DocumentVersionOrigin.GENERATED,
+    )
+
+    document_repo = DocumentRepository(engine)
+
+    with pytest.raises(InvalidInitialDocumentVersionError):
+        document_repo.save_with_initial_version(document, version)
+
+    assert document_repo.get_by_id(document.id) is None
+
+
+def test_document_repository_rejects_missing_initial_version_claim(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(engine).save(project)
+
+    missing_claim_id = uuid4()
+
+    document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    version = DocumentVersion(
+        document_id=document.id,
+        version_number=1,
+        content="# Project",
+        origin=DocumentVersionOrigin.GENERATED,
+        claim_ids=[missing_claim_id],
+    )
+
+    document_repo = DocumentRepository(engine)
+
+    with pytest.raises(KnowledgeClaimNotFoundError):
+        document_repo.save_with_initial_version(document, version)
+
+    assert document_repo.get_by_id(document.id) is None
+
+
+def test_document_repository_rejects_cross_project_initial_version_claim(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path / "project")
+    other_project = Project(
+        name="other_project",
+        repository_path=tmp_path / "other",
+    )
+
+    project_repo = ProjectRepository(engine)
+    project_repo.save(project)
+    project_repo.save(other_project)
+
+    evidence = Evidence(
+        project_id=other_project.id,
+        type="git_diff",
+        content="diff --git ...",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    EvidenceRepository(engine).save(evidence)
+
+    claim = KnowledgeClaim(
+        project_id=other_project.id,
+        statement="The other project added documentation support.",
+        basis=ClaimBasis.OBSERVATION,
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+    KnowledgeClaimRepository(engine).save(claim)
+
+    document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    version = DocumentVersion(
+        document_id=document.id,
+        version_number=1,
+        content="# Project",
+        origin=DocumentVersionOrigin.GENERATED,
+        claim_ids=[claim.id],
+    )
+
+    document_repo = DocumentRepository(engine)
+
+    with pytest.raises(KnowledgeClaimProjectMismatchError):
+        document_repo.save_with_initial_version(document, version)
+
+    assert document_repo.get_by_id(document.id) is None
+
+
 def test_document_get_by_id_returns_none_for_nonexistent_document():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -1162,6 +1395,65 @@ def test_document_version_supports_claim_provenance(tmp_path):
     retrieved = version_repo.get_by_id(version.id)
 
     assert retrieved == version
+
+
+def test_document_versions_can_share_claim_provenance(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(engine).save(project)
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="diff --git ...",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+    EvidenceRepository(engine).save(evidence)
+
+    claim = KnowledgeClaim(
+        project_id=project.id,
+        statement="The project added documentation support.",
+        basis=ClaimBasis.OBSERVATION,
+        confidence=ClaimConfidence.HIGH,
+        status=ClaimStatus.ACTIVE,
+        evidence_ids=[evidence.id],
+    )
+    KnowledgeClaimRepository(engine).save(claim)
+
+    document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    DocumentRepository(engine).save(document)
+
+    version_one = DocumentVersion(
+        document_id=document.id,
+        version_number=1,
+        content="# Version 1",
+        origin=DocumentVersionOrigin.GENERATED,
+        claim_ids=[claim.id],
+    )
+    version_two = DocumentVersion(
+        document_id=document.id,
+        version_number=2,
+        content="# Version 2",
+        origin=DocumentVersionOrigin.GENERATED,
+        claim_ids=[claim.id],
+    )
+
+    version_repo = DocumentVersionRepository(engine)
+    version_repo.save(version_one)
+    version_repo.save(version_two)
+
+    retrieved_one = version_repo.get_by_id(version_one.id)
+    retrieved_two = version_repo.get_by_id(version_two.id)
+
+    assert retrieved_one == version_one
+    assert retrieved_two == version_two
 
 
 def test_document_version_save_rejects_missing_document():

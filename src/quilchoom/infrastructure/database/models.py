@@ -60,7 +60,6 @@ document_version_claims = Table(
         "claim_id",
         ForeignKey("knowledge_claims.id", ondelete="CASCADE"),
         primary_key=True,
-        unique=True,
     ),
 )
 

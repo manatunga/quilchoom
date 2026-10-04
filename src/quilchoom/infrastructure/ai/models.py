@@ -89,3 +89,31 @@ class AIInterpretationOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     candidates: list[AIClaimCandidate] = Field(default_factory=list)
+
+
+class AIDocumentInput(BaseModel):
+    """Represents document identity exposed to an AI provider."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    kind: str
+
+
+class AIDocumentGenerationInput(BaseModel):
+    """Represents project knowledge exposed for AI document generation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project: AIProjectInput
+    document: AIDocumentInput
+    claims: list[AIActiveClaimInput] = Field(min_length=1)
+
+
+class AIDocumentGenerationOutput(BaseModel):
+    """Represents structured document generation output from an AI provider."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1)
+    claim_ids: list[UUID] = Field(min_length=1)

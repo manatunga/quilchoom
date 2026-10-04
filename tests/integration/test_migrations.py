@@ -29,7 +29,7 @@ def test_upgrade_creates_projects_table(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert revision == "9030269dd9ac"
+        assert revision == "3382e88e4db2"
 
 
 def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
@@ -51,7 +51,7 @@ def test_upgrade_database_stamps_compatible_legacy_database(tmp_path):
             text("SELECT version_num FROM alembic_version")
         ).scalar()
 
-        assert revision == "9030269dd9ac"
+        assert revision == "3382e88e4db2"
 
 
 def test_upgrade_database_rejects_incompatible_legacy_database(tmp_path):
@@ -130,7 +130,7 @@ def test_upgrade_database_creates_events_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "9030269dd9ac"
+        assert revision == "3382e88e4db2"
 
     finally:
         engine.dispose()
@@ -194,7 +194,7 @@ def test_upgrade_database_creates_evidence_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "9030269dd9ac"
+        assert revision == "3382e88e4db2"
 
     finally:
         engine.dispose()
@@ -280,7 +280,7 @@ def test_upgrade_database_creates_knowledge_claim_tables(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "9030269dd9ac"
+        assert revision == "3382e88e4db2"
 
     finally:
         engine.dispose()
@@ -417,7 +417,7 @@ def test_upgrade_database_creates_corrections_table(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "9030269dd9ac"
+        assert revision == "3382e88e4db2"
 
     finally:
         engine.dispose()
@@ -559,7 +559,7 @@ def test_upgrade_database_creates_document_tables(tmp_path):
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
 
-        assert revision == "9030269dd9ac"
+        assert revision == "3382e88e4db2"
 
     finally:
         engine.dispose()

@@ -23,6 +23,14 @@ class DocumentNotFoundError(Exception):
     """Raised when a referenced document cannot be found."""
 
 
+class DocumentVersionMismatchError(Exception):
+    """Raised when a document version does not belong to its target document."""
+
+
+class InvalidInitialDocumentVersionError(Exception):
+    """Raised when an initial document version does not have version number one."""
+
+
 class KnowledgeClaimProjectMismatchError(Exception):
     """Raised when a knowledge claim belongs to a different project."""
 
