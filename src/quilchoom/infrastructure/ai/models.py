@@ -88,7 +88,7 @@ class AIInterpretationOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    candidates: list[AIClaimCandidate] = Field(default_factory=list)
+    candidates: list[AIClaimCandidate]
 
 
 class AIDocumentInput(BaseModel):

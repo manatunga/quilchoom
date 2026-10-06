@@ -35,6 +35,7 @@ from quilchoom.infrastructure.database.errors import (
     InvalidInterpretationRunError,
     KnowledgeClaimNotFoundError,
     KnowledgeClaimProjectMismatchError,
+    ProjectNotFoundError,
 )
 from quilchoom.infrastructure.database.models import Base, ProjectModel
 from quilchoom.infrastructure.database.repositories import (
@@ -72,6 +73,30 @@ def test_project_save(tmp_path):
         domain_values["repository_path"] = str(domain_values["repository_path"])
 
         assert db_values == domain_values
+
+
+def test_project_repo_get_on_existing_project(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    repository = ProjectRepository(db_engine)
+    repository.save(project)
+
+    retrieved = repository.get()
+
+    assert retrieved == project
+
+
+def test_project_repo_get_on_empty_database():
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    repository = ProjectRepository(db_engine)
+
+    retrieved = repository.get()
+
+    assert retrieved is None
 
 
 def test_project_repo_get_by_id_on_existing_project(tmp_path):
@@ -122,6 +147,39 @@ def test_project_repo_get_by_repository_path_on_unknown_path(tmp_path):
     assert retrieved is None
 
 
+def test_project_repo_update_repository_path(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    original_path = tmp_path / "original"
+    new_path = tmp_path / "moved"
+
+    project = Project(name="my_project", repository_path=original_path)
+    repository = ProjectRepository(db_engine)
+    repository.save(project)
+
+    updated = repository.update_repository_path(project.id, new_path)
+
+    assert updated.id == project.id
+    assert updated.repository_path == new_path
+    assert updated.name == project.name
+    assert updated.created_at == project.created_at
+
+    retrieved = repository.get_by_id(project.id)
+
+    assert retrieved == updated
+
+
+def test_project_repo_update_repository_path_on_unknown_project(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    repository = ProjectRepository(db_engine)
+
+    with pytest.raises(ProjectNotFoundError):
+        repository.update_repository_path(uuid4(), tmp_path)
+
+
 def test_event_repo_save_and_get_event(tmp_path):
     db_engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(db_engine)
@@ -144,6 +202,66 @@ def test_event_repo_save_and_get_event(tmp_path):
     retrieved = event_repo.get_by_id(event.id)
 
     assert retrieved == event
+
+
+def test_event_repo_save_with_evidence_rolls_back_on_failure(tmp_path):
+    db_engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(db_engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    project_repo = ProjectRepository(db_engine)
+    project_repo.save(project)
+
+    event_repo = EventRepository(db_engine)
+    evidence_repo = EvidenceRepository(db_engine)
+
+    existing_evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="existing evidence",
+        reference="abc123",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+
+    evidence_repo.save(existing_evidence)
+
+    event = Event(
+        project_id=project.id,
+        type="git_commit",
+        timestamp=datetime.now(UTC),
+        summary="New commit",
+        source="git",
+        source_reference="abc123",
+    )
+
+    evidence = Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content="new evidence",
+        reference="abc123",
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+
+    with pytest.raises(IntegrityError):
+        event_repo.save_with_evidence(event, evidence)
+
+    retrieved_event = event_repo.get_by_source_reference(
+        project.id,
+        "git",
+        "abc123",
+    )
+
+    assert retrieved_event is None
+
+    retrieved_evidence = evidence_repo.get_by_reference(
+        project.id,
+        "git",
+        "abc123",
+    )
+
+    assert retrieved_evidence == existing_evidence
 
 
 def test_event_repo_get_by_id_on_non_existent_event():
@@ -1653,9 +1771,63 @@ def test_get_latest_document_version_returns_none_when_no_versions(tmp_path):
     assert version_repo.get_latest(document.id) is None
 
 
-def test_interpretation_run_save_with_claims_persists_claims_and_provenance(
+def test_get_document_version_by_version_number(tmp_path):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(engine).save(project)
+
+    document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    DocumentRepository(engine).save(document)
+
+    version_one = DocumentVersion(
+        document_id=document.id,
+        version_number=1,
+        content="# Version 1",
+        origin=DocumentVersionOrigin.GENERATED,
+    )
+    version_two = DocumentVersion(
+        document_id=document.id,
+        version_number=2,
+        content="# Version 2",
+        origin=DocumentVersionOrigin.MANUAL,
+    )
+
+    version_repo = DocumentVersionRepository(engine)
+    version_repo.save(version_one)
+    version_repo.save(version_two)
+
+    assert version_repo.get_by_version_number(document.id, 1) == version_one
+    assert version_repo.get_by_version_number(document.id, 2) == version_two
+
+
+def test_get_document_version_by_version_number_returns_none_when_missing(
     tmp_path,
 ):
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    project = Project(name="my_project", repository_path=tmp_path)
+    ProjectRepository(engine).save(project)
+
+    document = Document(
+        project_id=project.id,
+        key="readme",
+        kind="readme",
+    )
+    DocumentRepository(engine).save(document)
+
+    version_repo = DocumentVersionRepository(engine)
+
+    assert version_repo.get_by_version_number(document.id, 1) is None
+
+
+def test_interpretation_run_save_with_claims_persists_claims_and_provenance(tmp_path):
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
 
@@ -1729,9 +1901,7 @@ def test_interpretation_run_save_with_claims_persists_claims_and_provenance(
     }
 
 
-def test_interpretation_run_save_with_zero_claims_marks_evidence_interpreted(
-    tmp_path,
-):
+def test_interpretation_run_save_with_zero_claims_marks_evidence_interpreted(tmp_path):
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
 

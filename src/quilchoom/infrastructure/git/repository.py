@@ -80,3 +80,26 @@ def inspect_commit(repository_path: Path, commit_sha: str) -> GitCommit:
         message=message.strip(),
         diff=diff.strip(),
     )
+
+
+def list_commit_shas(repository_path: Path) -> list[str]:
+    verify_result = subprocess.run(
+        ["git", "rev-parse", "--verify", "HEAD"],
+        cwd=repository_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    if verify_result.returncode != 0:
+        return []
+
+    result = subprocess.run(
+        ["git", "rev-list", "--reverse", "HEAD"],
+        cwd=repository_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    return result.stdout.splitlines()

@@ -30,36 +30,39 @@ def capture_commit(
         commit.sha,
     )
 
-    if existing_event is None:
-        event = Event(
-            project_id=project.id,
-            type="git_commit",
-            timestamp=commit.timestamp,
-            summary=commit.message,
-            source="git",
-            source_reference=commit.sha,
-        )
-        event_repository.save(event)
-    else:
-        event = existing_event
-
     existing_evidence = evidence_repository.get_by_reference(
         project.id,
         "git",
         commit.sha,
     )
 
-    if existing_evidence is None:
-        evidence = Evidence(
-            project_id=project.id,
-            type="git_diff",
-            content=commit.diff,
-            reference=commit.sha,
-            captured_at=datetime.now(UTC),
-            source="git",
-        )
+    if existing_event is not None and existing_evidence is not None:
+        return existing_event, existing_evidence
+
+    event = existing_event or Event(
+        project_id=project.id,
+        type="git_commit",
+        timestamp=commit.timestamp,
+        summary=commit.message,
+        source="git",
+        source_reference=commit.sha,
+    )
+    evidence = existing_evidence or Evidence(
+        project_id=project.id,
+        type="git_diff",
+        content=commit.diff,
+        reference=commit.sha,
+        captured_at=datetime.now(UTC),
+        source="git",
+    )
+
+    if existing_event is None and existing_evidence is None:
+        event_repository.save_with_evidence(event, evidence)
+
+    elif existing_event is None:
+        event_repository.save(event)
+
+    elif existing_evidence is None:
         evidence_repository.save(evidence)
-    else:
-        evidence = existing_evidence
 
     return event, evidence

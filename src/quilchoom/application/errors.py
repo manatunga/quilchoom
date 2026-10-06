@@ -7,6 +7,10 @@ class ProjectInitializationError(Exception):
     """Raised when a Quilchoom project cannot be initialized."""
 
 
+class ProjectRuntimeError(Exception):
+    """Raised when an existing Quilchoom project cannot be loaded."""
+
+
 class HistoryReconstructionError(Exception):
     """Raised when a project's development history cannot be reconstructed."""
 
@@ -33,3 +37,11 @@ class NoActiveClaimsError(Exception):
 
 class InvalidGeneratedClaimError(Exception):
     """Raised when generated document provenance references an unavailable claim."""
+
+
+class DocumentUnavailableError(Exception):
+    """Raised when a requested project document has not been generated."""
+
+
+class DocumentVersionUnavailableError(Exception):
+    """Raised when a requested document version does not exist."""

@@ -64,7 +64,7 @@ def test_ai_claim_candidate_rejects_extra_fields():
 
 
 def test_ai_interpretation_output_allows_zero_candidates():
-    output = AIInterpretationOutput()
+    output = AIInterpretationOutput(candidates=[])
 
     assert output.candidates == []
 
@@ -75,3 +75,9 @@ def test_ai_interpretation_output_rejects_extra_fields():
             candidates=[],
             provider_metadata={"model": "example"},  # type: ignore
         )
+
+
+def test_interpretation_output_schema_requires_candidates() -> None:
+    schema = AIInterpretationOutput.model_json_schema()
+
+    assert "candidates" in schema["required"]

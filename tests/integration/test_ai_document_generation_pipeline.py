@@ -113,8 +113,7 @@ def test_ai_document_generation_pipeline_persists_generated_document(tmp_path):
     assert version.version_number == 1
     assert version.origin == DocumentVersionOrigin.GENERATED
     assert version.content == (
-        "# Quilchoom\n\n"
-        "Quilchoom captures development activity as structured evidence."
+        "# Quilchoom\n\nQuilchoom captures development activity as structured evidence."
     )
     assert version.claim_ids == [claim.id]
 

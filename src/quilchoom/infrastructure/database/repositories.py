@@ -19,12 +19,14 @@ from quilchoom.domain.project import Project
 from quilchoom.infrastructure.database.errors import (
     DocumentNotFoundError,
     DocumentVersionMismatchError,
+    EventEvidenceMismatchError,
     EvidenceNotFoundError,
     EvidenceProjectMismatchError,
     InvalidInitialDocumentVersionError,
     InvalidInterpretationRunError,
     KnowledgeClaimNotFoundError,
     KnowledgeClaimProjectMismatchError,
+    ProjectNotFoundError,
 )
 from quilchoom.infrastructure.database.models import (
     CorrectionModel,
@@ -63,6 +65,17 @@ class ProjectRepository:
             session.add(project_model)
             session.commit()
 
+    def get(self) -> Project | None:
+        with Session(self.engine) as session:
+            model = session.scalars(select(ProjectModel)).first()
+
+            if model is None:
+                return None
+
+            project = self._to_domain(model)
+
+            return project
+
     def get_by_id(self, project_id: UUID) -> Project | None:
         with Session(self.engine) as session:
             model = session.scalars(
@@ -86,6 +99,26 @@ class ProjectRepository:
 
             if model is None:
                 return None
+
+            project = self._to_domain(model)
+
+            return project
+
+    def update_repository_path(
+        self,
+        project_id: UUID,
+        repository_path: Path,
+    ) -> Project:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(ProjectModel).where(ProjectModel.id == str(project_id))
+            ).first()
+
+            if model is None:
+                raise ProjectNotFoundError(f"Project not found: {project_id}")
+
+            model.repository_path = str(repository_path)
+            session.commit()
 
             project = self._to_domain(model)
 
@@ -121,6 +154,42 @@ class EventRepository:
                 event_metadata=event.metadata,
             )
             session.add(event_model)
+            session.commit()
+
+    def save_with_evidence(self, event: Event, evidence: Evidence) -> None:
+        if (
+            event.project_id != evidence.project_id
+            or event.source != evidence.source
+            or event.source_reference != evidence.reference
+        ):
+            raise EventEvidenceMismatchError(
+                "Event and evidence do not describe the same activity."
+            )
+
+        with Session(self.engine) as session:
+            event_model = EventModel(
+                id=str(event.id),
+                project_id=str(event.project_id),
+                type=event.type,
+                timestamp=event.timestamp.replace(tzinfo=None),
+                summary=event.summary,
+                source=event.source,
+                source_reference=event.source_reference,
+                event_metadata=event.metadata,
+            )
+            evidence_model = EvidenceModel(
+                id=str(evidence.id),
+                project_id=str(evidence.project_id),
+                type=evidence.type,
+                content=evidence.content,
+                reference=evidence.reference,
+                captured_at=evidence.captured_at.replace(tzinfo=None),
+                source=evidence.source,
+                evidence_metadata=evidence.metadata,
+            )
+
+            session.add(event_model)
+            session.add(evidence_model)
             session.commit()
 
     def get_by_id(self, event_id: UUID) -> Event | None:
@@ -621,6 +690,24 @@ class DocumentVersionRepository:
             model = session.scalars(
                 select(DocumentVersionModel).where(
                     DocumentVersionModel.id == str(version_id)
+                )
+            ).first()
+
+            if model is None:
+                return None
+
+            version = self._to_domain(model)
+
+            return version
+
+    def get_by_version_number(
+        self, document_id: UUID, version_number: int
+    ) -> DocumentVersion | None:
+        with Session(self.engine) as session:
+            model = session.scalars(
+                select(DocumentVersionModel).where(
+                    DocumentVersionModel.document_id == str(document_id),
+                    DocumentVersionModel.version_number == version_number,
                 )
             ).first()
 

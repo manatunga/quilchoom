@@ -37,3 +37,11 @@ class KnowledgeClaimProjectMismatchError(Exception):
 
 class InvalidInterpretationRunError(Exception):
     """Raised when an interpretation run is inconsistent with its claims."""
+
+
+class ProjectNotFoundError(Exception):
+    """Raised when a referenced project cannot be found in the database."""
+
+
+class EventEvidenceMismatchError(Exception):
+    """Raised when an event and its supporting evidence do not describe the same activity."""
