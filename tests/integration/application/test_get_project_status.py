@@ -1,5 +1,5 @@
 """
-Integrated tests for project workflow status determination.
+Integration tests for project workflow status determination.
 """
 
 import subprocess

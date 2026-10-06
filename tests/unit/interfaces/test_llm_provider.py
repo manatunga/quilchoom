@@ -1,5 +1,5 @@
 """
-Tests the provider-neutral LLM interface models.
+Unit tests on provider-neutral LLM interface models.
 """
 
 import pytest

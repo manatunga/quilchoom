@@ -1,5 +1,5 @@
 """
-Tests environment-based AI credential resolution.
+Unit tests on environment-based AI credential resolution.
 """
 
 import pytest

@@ -1,5 +1,5 @@
 """
-Tests the knowledge interpretation application workflow.
+Integration tests for knowledge interpretation application workflow.
 """
 
 from datetime import UTC, datetime

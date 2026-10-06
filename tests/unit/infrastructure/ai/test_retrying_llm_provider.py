@@ -1,5 +1,5 @@
 """
-Tests retry behavior for transient LLM provider failures.
+Unit tests on retry behavior for transient LLM provider failures.
 """
 
 import pytest

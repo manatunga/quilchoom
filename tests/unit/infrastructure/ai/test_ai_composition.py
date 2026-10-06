@@ -1,5 +1,5 @@
 """
-Tests composition of Quilchoom's configured AI infrastructure.
+Unit tests on composition of Quilchoom's configured AI infrastructure.
 """
 
 import pytest

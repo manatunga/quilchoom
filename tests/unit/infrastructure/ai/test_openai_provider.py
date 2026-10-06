@@ -1,5 +1,5 @@
 """
-Tests the OpenAI LLM provider adapter.
+Unit tests on OpenAI LLM provider adapter.
 """
 
 from types import SimpleNamespace

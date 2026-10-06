@@ -1,5 +1,5 @@
 """
-Integrated tests for Quilchoom's Git repository capture process.
+Integration tests for Quilchoom's Git repository capture process.
 """
 
 import subprocess
@@ -15,6 +15,7 @@ from quilchoom.infrastructure.database.repositories import (
     EvidenceRepository,
     ProjectRepository,
 )
+from tests.helpers.git import initialize_git_repository
 
 
 def create_commit(tmp_path, filename: str, content: str, message: str) -> str:
@@ -65,13 +66,7 @@ def create_capture_context(tmp_path):
 
 
 def test_capture_repository_captures_all_commits(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     first_sha = create_commit(
         tmp_path,
@@ -120,13 +115,7 @@ def test_capture_repository_captures_all_commits(tmp_path):
 
 
 def test_capture_repository_captures_only_uncaptured_commits(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     first_sha = create_commit(
         tmp_path,
@@ -190,13 +179,7 @@ def test_capture_repository_captures_only_uncaptured_commits(tmp_path):
 
 
 def test_capture_repository_is_no_op_when_current(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     create_commit(
         tmp_path,

@@ -11,6 +11,7 @@ from quilchoom.infrastructure.git.repository import (
     inspect_commit,
     list_commit_shas,
 )
+from tests.helpers.git import initialize_git_repository
 
 
 def test_find_repository_root_from_root():
@@ -37,13 +38,7 @@ def test_find_repository_root_outside_git_repository(tmp_path):
 
 
 def test_inspect_commit(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     (tmp_path / "README.md").touch()
     (tmp_path / "src").mkdir()
@@ -82,13 +77,7 @@ def test_inspect_commit(tmp_path):
 
 
 def test_list_commit_shas_returns_commits_from_oldest_to_newest(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     (tmp_path / "README.md").touch()
 
@@ -172,13 +161,7 @@ def test_list_commit_shas_returns_commits_from_oldest_to_newest(tmp_path):
 
 
 def test_list_commit_shas_on_empty_repository(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     result = list_commit_shas(tmp_path)
 

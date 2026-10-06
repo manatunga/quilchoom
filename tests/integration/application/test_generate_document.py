@@ -1,5 +1,5 @@
 """
-Tests the document generation application workflow.
+Integration tests for document generation application workflow.
 """
 
 from datetime import UTC, datetime

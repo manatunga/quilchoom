@@ -1,5 +1,5 @@
 """
-Integrated tests for Quilchoom's Git commit capture process.
+Integration tests for Quilchoom's Git commit capture process.
 """
 
 import subprocess
@@ -15,16 +15,11 @@ from quilchoom.infrastructure.database.repositories import (
     EvidenceRepository,
     ProjectRepository,
 )
+from tests.helpers.git import initialize_git_repository
 
 
 def test_capture_commit_persists_event_and_evidence(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     (tmp_path / "README.md").write_text("# My project\n")
 
@@ -86,13 +81,7 @@ def test_capture_commit_persists_event_and_evidence(tmp_path):
 
 
 def test_capture_commit_is_idempotent(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     (tmp_path / "README.md").write_text("# My project\n")
 

@@ -1,5 +1,5 @@
 """
-Integrated tests for Quilchoom's SQLite engine.
+Integration tests for Quilchoom's SQLite engine.
 """
 
 from sqlalchemy import Engine, inspect

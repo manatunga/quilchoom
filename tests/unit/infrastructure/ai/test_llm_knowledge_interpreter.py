@@ -1,5 +1,5 @@
 """
-Tests LLM-backed knowledge interpretation behavior.
+Unit tests on LLM-backed knowledge interpretation behavior.
 """
 
 import json

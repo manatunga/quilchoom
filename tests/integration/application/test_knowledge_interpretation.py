@@ -24,6 +24,7 @@ from quilchoom.infrastructure.database.repositories import (
     KnowledgeClaimRepository,
     ProjectRepository,
 )
+from tests.helpers.git import initialize_git_repository
 
 
 class DeterministicInterpreter:
@@ -41,13 +42,7 @@ class DeterministicInterpreter:
 
 
 def test_interpret_captured_git_history_end_to_end(tmp_path):
-    subprocess.run(
-        ["git", "init"],
-        cwd=tmp_path,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    initialize_git_repository(tmp_path)
 
     (tmp_path / "README.md").write_text("# My project\n")
 

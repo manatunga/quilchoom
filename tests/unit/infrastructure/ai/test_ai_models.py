@@ -1,5 +1,5 @@
 """
-Tests the validation boundaries of AI-facing data models.
+Unit tests for validation boundaries of AI-facing data models.
 """
 
 from uuid import uuid4

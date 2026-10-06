@@ -1,5 +1,5 @@
 """
-Tests LLM-backed document generation behavior.
+Unit tests on LLM-backed document generation behavior.
 """
 
 import json
