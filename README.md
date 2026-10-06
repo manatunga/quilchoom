@@ -6,6 +6,7 @@ Quilchoom is an open-source developer tool that turns your development history i
 
 ![Quilchoom CLI demonstrating the capture, distill, and scribe workflow](docs/assets/quilchoom-demo.png)
 
+<br>
 
 ## Highlights
 
@@ -53,6 +54,7 @@ Evidence ──► Reconstructed history
 
 In *v0.1*, Git is the first development activity source and README generation is the first supported documentation workflow.
 
+<br>
 
 ## Installation
 
@@ -85,6 +87,7 @@ qlchm --help
 
 AI-backed operations require an OpenAI API key. Quilchoom uses your own provider credentials; configuration is covered below.
 
+<br>
 
 ## Quick start
 
@@ -221,6 +224,7 @@ quilchoom --debug scribe generate readme
 
 `--debug` is a global option and must appear before the command.
 
+<br>
 
 ## Commands
 
@@ -256,6 +260,7 @@ quilchoom log --help
 quilchoom scribe export readme --help
 ```
 
+<br>
 
 ## Traceability by design
 
@@ -287,6 +292,7 @@ Quilchoom stores project state locally in `.quilchoom/`. Project knowledge, evid
 
 API credentials are kept outside that workspace and supplied through the environment.
 
+<br>
 
 ## Configuration
 
@@ -324,6 +330,7 @@ Quilchoom does not write your OpenAI API key to `.quilchoom/config.toml` or its 
 
 Quilchoom Core does not impose its own AI generation quota. AI requests use your configured provider credentials, so usage and associated costs are determined by your provider and selected model.
 
+<br>
 
 ## Project status
 
@@ -337,12 +344,15 @@ The broader direction for Quilchoom Core is to turn accumulated project knowledg
 
 Quilchoom is early-stage software. Commands, configuration, interfaces, and internal architecture may evolve as the project gains real-world usage and feedback.
 
+<br>
 
 ## Contributing
 
 Quilchoom is open source and early in its development. Contributions, bug reports, feature ideas, and documentation improvements are welcome.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and contribution guidelines.
+
+<br>
 
 ## License
 
