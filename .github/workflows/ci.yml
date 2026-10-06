@@ -44,5 +44,10 @@ jobs:
             - name: Type Checking
               run: uv run pyright
             
-            - name: Run Tests
-              run: uv run pytest
+            - name: Run Tests with Coverage
+              run: uv run pytest --cov=quilchoom --cov-report=term-missing --cov-report=xml
+            
+            - name: Upload Coverage
+              uses: codecov/codecov-action@v5
+              with:
+                token: ${{ secrets.CODECOV_TOKEN }}
