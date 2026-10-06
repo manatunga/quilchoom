@@ -6,8 +6,6 @@ Quilchoom is an open-source developer tool that turns your development history i
 
 ![Quilchoom CLI demonstrating the capture, distill, and scribe workflow](docs/assets/quilchoom-demo.png)
 
-<br>
-
 ## Highlights
 
 - **Development history as evidence** — Capture Git activity as structured development evidence instead of treating repository history as disposable context.
@@ -17,6 +15,7 @@ Quilchoom is an open-source developer tool that turns your development history i
 - **Local-first** — Keep Quilchoom's project state and development knowledge in a local `.quilchoom/` workspace.
 - **Bring your own API key** — Use your own AI-provider credentials without storing API keys in project configuration.
 
+<br>
 
 ## How it works
 
