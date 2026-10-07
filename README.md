@@ -4,6 +4,13 @@
 
 Quilchoom is an open-source developer tool that turns your development history into traceable project knowledge and useful documentation.
 
+[![PyPI](https://img.shields.io/pypi/v/quilchoom)](https://pypi.org/project/quilchoom/)
+[![Python](https://img.shields.io/pypi/pyversions/quilchoom)](https://pypi.org/project/quilchoom/)
+[![CI](https://github.com/manatunga/quilchoom/actions/workflows/ci.yml/badge.svg)](https://github.com/manatunga/quilchoom/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/manatunga/quilchoom/graph/badge.svg)](https://codecov.io/gh/manatunga/quilchoom)
+[![License](https://img.shields.io/github/license/manatunga/quilchoom)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 ![Quilchoom CLI demonstrating the capture, distill, and scribe workflow](docs/assets/quilchoom-demo.png)
 
 ## Highlights
