@@ -128,4 +128,4 @@ jobs:
             dist/* \
             --verify-tag \
             --generate-notes \
-            --title "Quilchoom ${{ github.ref_name }}"
+            --title "${{ github.ref_name }}"
