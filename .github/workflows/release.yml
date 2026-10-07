@@ -1,0 +1,106 @@
+name: Release
+
+on:
+    push:
+        tags:
+            - 'v*'
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v4
+
+            - name: Configure Python Environment
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.14'
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+              with:
+                enable-cache: true
+
+            - name: Build Distribution
+              run: uv build --no-sources
+            
+            - name: Check Distribution
+              run: uvx twine check dist/*
+            
+            - name: Upload Distribution
+              uses: actions/upload-artifact@v4
+              with:
+                name: python-package-distributions
+                path: dist/
+                if-no-files-found: error
+    
+    smoke-test:
+        needs: build
+        runs-on: ubuntu-latest
+
+        strategy:
+            matrix:
+                distribution:
+                    - wheel
+                    - sdist
+
+        steps:
+            - name: Download Distribution
+              uses: actions/download-artifact@v5
+              with:
+                name: python-package-distributions
+                path: dist/
+            
+            - name: Configure Python Environment
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.14'
+            
+            - name: Install Distribution
+              shell: bash
+              run: |
+                if [ "${{ matrix.distribution }}" = "wheel" ]; then
+                    python -m pip install dist/*.whl
+                else
+                    python -m pip install dist/*.tar.gz
+                fi
+             
+            - name: Verify CLI
+              run: |
+                quilchoom --version
+                qlchm --version
+                quilchoom --help
+
+                mkdir smoke-test-project
+                cd smoke-test-project
+                git init
+                quilchoom init
+                quilchoom status
+
+    publish:
+        needs: smoke-test
+        runs-on: ubuntu-latest
+
+        environment:
+            name: pypi
+        
+        permissions:
+            id-token: write
+        
+        steps:
+            - name: Download Distribution
+              uses: actions/download-artifact@v5
+              with:
+                name: python-package-distributions
+                path: dist/
+            
+            - name: Install uv
+              uses: astral-sh/setup-uv@v7
+            
+            - name: Publish to PyPI
+              run: uv publish
