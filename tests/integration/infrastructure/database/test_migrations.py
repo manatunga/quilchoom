@@ -3,10 +3,10 @@ Integration tests for Quilchoom's database migrations.
 """
 
 import pytest
+from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
-from alembic import command
 from quilchoom.infrastructure.database.connection import initialize_database
 from quilchoom.infrastructure.database.errors import DatabaseMigrationError
 from quilchoom.infrastructure.database.migrations import upgrade_database
