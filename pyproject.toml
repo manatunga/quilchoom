@@ -10,6 +10,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE*"]
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.20.0",
     "openai>=3.24.0",
     "pydantic>=2.13.5",
     "rich>=15.0.0",
@@ -51,7 +52,6 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "alembic>=1.20.0",
     "pyright>=1.1.414",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",

@@ -4,19 +4,20 @@ Provides database schema migration operations for Quilchoom.
 
 from pathlib import Path
 
+from alembic import command
 from alembic.config import Config
 from sqlalchemy import Inspector, create_engine, inspect
 
-from alembic import command
 from quilchoom.infrastructure.database.errors import DatabaseMigrationError
 
 
 def upgrade_database(database_path: Path) -> None:
     """Upgrade a workspace database to the latest schema."""
-    project_root = Path(__file__).resolve().parents[4]
-    alembic_ini = project_root / "alembic.ini"
 
-    config = Config(str(alembic_ini))
+    migration_directory = Path(__file__).resolve().parent / "alembic"
+
+    config = Config()
+    config.set_main_option("script_location", str(migration_directory))
 
     database_url = f"sqlite:///{database_path.resolve()}"
     config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
