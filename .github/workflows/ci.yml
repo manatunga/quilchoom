@@ -1,53 +1,53 @@
 name: CI
 
 on:
-    push:
-        branches:
-            - main
-            - 'feat/**'
-            - 'fix/**'
-            - 'ci/**'
-    pull_request:
-        branches:
-            - main
+  push:
+    branches:
+      - main
+      - 'feat/**'
+      - 'fix/**'
+      - 'ci/**'
+  pull_request:
+    branches:
+        - main
 
 permissions:
   contents: read
 
 jobs:
-    quality:
-        runs-on: ubuntu-latest
+  quality:
+    runs-on: ubuntu-latest
 
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
-            
-            - name: Configure Python Environment
-              uses: actions/setup-python@v5
-              with:
-                python-version: '3.14'
-            
-            - name: Install uv
-              uses: astral-sh/setup-uv@v7
-              with:
-                enable-cache: true
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Configure Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
 
-            - name: Install Dependencies
-              run: uv sync --locked
-            
-            - name: Lint
-              run: uv run ruff check .
-            
-            - name: Check Formatting
-              run: uv run ruff format --check .
+      - name: Install Dependencies
+        run: uv sync --locked
+      
+      - name: Lint
+        run: uv run ruff check .
+      
+      - name: Check Formatting
+        run: uv run ruff format --check .
 
-            - name: Type Checking
-              run: uv run pyright
-            
-            - name: Run Tests with Coverage
-              run: uv run pytest --cov=quilchoom --cov-report=term-missing --cov-report=xml
-            
-            - name: Upload Coverage
-              uses: codecov/codecov-action@v5
-              with:
-                token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Type Checking
+        run: uv run pyright
+      
+      - name: Run Tests with Coverage
+        run: uv run pytest --cov=quilchoom --cov-report=term-missing --cov-report=xml
+      
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
