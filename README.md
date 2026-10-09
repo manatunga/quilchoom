@@ -230,6 +230,9 @@ quilchoom --debug scribe generate readme
 
 `--debug` is a global option and must appear before the command.
 
+See the [troubleshooting guide](docs/troubleshooting.md) for common Git,
+initialization, credential, and provider errors, with steps to resolve them.
+
 <br>
 
 ## Commands
